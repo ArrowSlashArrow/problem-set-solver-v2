@@ -210,10 +210,12 @@ def main():
                 print(f"\n-----------[ {green}Start of {module} {reset}]-----------")
                 load_module(module)
                 print(f"------------[ {red}End of {module} {reset}]------------\n")
-            case "Import module":
-                print("not implemented yet")  # todo: prompt user with file input dialog thingy: adds slected file to /modules or from a list of modules uploaded to server (kind of like pip)
+            case "Import module from file":
+                print("not implemented yet")  # todo: prompt user with file input dialog thingy: adds slected file to /modules 
+            case "Import module from server":
+                print("not implemented yet")  # todo: prompt user with input dialog: get valid input (valid_inputs = modules.txt on server) -> download module from server -> add to /modules
             case "Change settings":  # possibly tag system? (settings + search)
-                print("not implemented yet")  # todo: print box with all settings and values, get user input as id or str, prompt for new value
+                change_settings()
             case "Print user guide":
                 print(tutorial_str)
             case "Exit":
