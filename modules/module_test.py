@@ -4,5 +4,9 @@
 # todo: tag system
 
 def solver():
-    print("cat program:\n")
-    print(input())
+    # example
+    print("add two numbers program")
+    a = input("first number: ")
+    b = input("second number: ")
+
+    print(f"sum: {int(a) + int(b)}")

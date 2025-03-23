@@ -1,4 +1,4 @@
-import os, importlib.util
+import os, importlib.util, json
 from rich import console, table
 
 # intialize rich console and module table arrays
@@ -7,14 +7,63 @@ modules = []
 
 # ansi colours
 reset = "\x1b[0m"
+italic = "\x1b[3m"
+bold = "\x1b[1m"
 cyan = "\x1b[38;5;6m"
 green = "\x1b[38;5;2m"
 yellow = "\x1b[38;5;3m"
 red = "\x1b[38;5;9m"
+grey = "\x1b[38;5;8m"
+
+# bone-chillingly beautiful ascii art
+tutorial_str = f"""  
+Welcome to the module system tutorial!
+To select an action, type its {yellow}name{reset} or its corresponding {green}ID{reset}.
+If you want to create your own module, follow the instructions below:
+1. Create a new python file (.py)
+2. put three comments in the file (comments begin with #) that say:
+ - the name of the module (e.g. # name: Module)
+ - a description of the module (e.g. # description: some module)
+3. put it in the /modules folder or import it through the program 
+
+{reset}{italic}{grey}Made by </> (arrow) on 2025/03/19, last updated v0.1.0{reset}
+"""  # add stuff later when added
+
+# module table
+titles = {  # constant
+    "ID": {"style": "cyan", "justify": "right"},
+    "Module Name": {"style": "green", "justify": "right"},
+    "Module Description": {"style": "yellow", "justify": "left"}
+}
+
+descriptions = []
+module_names = []
+ids = [str(i) for i in range(len(modules))]
+module_table_data = [ids, module_names, descriptions]
+module_table = table.Table(title="Installed Modules")
+
+# settings
+settings = {}
+
+def update_settings():
+    global settings
+    settings = json.load(open("settings.json", "r"))
+
+
+def display_settings():
+    settings_table = table.Table(title="Settings")
+    settings_table.add_column("Setting", justify="right", style="green")
+    settings_table.add_column("Value", justify="left", style="yellow")
+    for setting, value in settings.items():
+        settings_table.add_row(setting, value)
+
+    console.print(settings_table)
+
 
 # parse num util function
 # maybe put the inside of a utils.py?
 def parse_num(num: str):
+
     try:
         return int(num)
     except ValueError:
@@ -22,6 +71,7 @@ def parse_num(num: str):
             return float(num)
         except ValueError:
             return num
+
 
 # return rich table object
 # example title: {"fone linging": {"style": "cyan", "align": "left"}, ...}
@@ -35,17 +85,29 @@ def new_table(name: str, titles: dict, rows: list[list]):
     return module_table
 
 
+def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=False, back_enabled :bool=True, err_word: str="input"):
+    valid_inputs.extend([str(i) for i in range(len(valid_inputs))] if indices else [])
+    while True:
+        inp = input(input_message).rstrip()
+        if inp == "back" and back_enabled:
+            return "\0"
+        if inp not in valid_inputs:
+            print(f"{inp} is not a valid {err_word}, please try again.")
+            continue
+        else:
+            if indices and type(parse_num(inp)) == int:
+                return valid_inputs[int(inp)]
+            else:
+                return inp
+
+
 def refresh_modules():
     global modules
-    modules = [m for m in os.listdir("modules") if m.endswith(".py")]
+    modules = [m for m in os.listdir("modules") if m.endswith(".py") and os.path.isfile(f"modules/{m}")]
 
-# returns module filename
-def module_select():
-    titles = {
-        "ID": {"style": "cyan", "justify": "right"},
-        "Module Name": {"style": "green", "justify": "right"},
-        "Module Description": {"style": "yellow", "justify": "left"}
-    }
+
+def update_module_table():
+    global titles, module_table, descriptions, module_names, ids, module_table_data
 
     descriptions = []
     module_names = []
@@ -54,7 +116,8 @@ def module_select():
     for module in modules:
         try:
             with open(f"modules/{module}", "r") as f:
-                name_line, desc_line = f.read().split("\n")[:2]  # metadata is first two lines -> change this to search for it in the file instead of being in the top two lines. maybe use regex? 
+                lines = f.read().split("\n")
+                name_line, desc_line = lines[:2]  # metadata is first two lines -> change this to search for it in the file instead of being in the top two lines. maybe use regex? 
                 module_names.append(name_line.split("# name: ")[1] if "# name: " in name_line else "<unnamed>")
                 new_desc = desc_line.split("# description: ")[1] if "# description: " in desc_line else "<none>"
                 descriptions.append(f"Description: {new_desc}")
@@ -65,28 +128,19 @@ def module_select():
 
     module_table_data = [ids, module_names, descriptions]
     module_table = new_table("Installed Modules", titles, module_table_data)
-    # generate table at execution time to account for imported modules
+
+
+# returns module filename
+def module_select():
+   
+    # update table at execution time to account for imported modules
+    update_module_table()
     console.print(module_table)
     
-    choice = 0
-    # prompt until valid input
-    while True:
-        inp = input(f"> Select a module by {cyan}ID{reset} or {green}name{reset}: ").rstrip()
-        parsed_inp = parse_num(inp)
-        if type(parsed_inp) == int:
-            if parsed_inp < 0 or parsed_inp >= len(module_names):
-                console.print("Invalid number, please try again.")
-                continue
-            else:
-                choice = module_names[parsed_inp]
-                break
-        else:
-            if inp not in module_names:
-                console.print("Invalid module name, please try again.")
-                continue
-            else:
-                choice = inp
-                break
+    choice = get_valid_input(f"> Select a module by {cyan}ID{reset} or {green}name{reset}: ", module_names, True, "module")
+    if choice == "\0":
+        return
+    # map choice index to module
     choice_index = module_names.index(choice)
     return modules[choice_index]
 
@@ -94,14 +148,15 @@ def module_select():
 """
 All actions:
 - Select a module
-- Import module
+- Import module from file
+- Import module from server
 - Change settings
-- Print user guide
+- Print user guide from modules
 - Exit
 """
 
 def action_select():
-    actions = ["Select a module", "Import module", "Change settings", "Print user guide", "Exit"]
+    actions = ["Select a module", "Import module from file", "Import module from server", "Change settings", "Print user guide", "Exit"]
     lower_actions = [a.lower() for a in actions]
     ids = [str(i) for i in range(len(actions))]
     titles = {
@@ -111,26 +166,7 @@ def action_select():
     action_table_data = [ids, actions]
     action_table = new_table("Actions", titles, action_table_data)
     console.print(action_table)
-    choice = ""
-    while True:
-        inp = parse_num(input(f"> Select an action by its {green}ID{reset} or {yellow}name{reset}: ").rstrip())
-        # choice is a name
-        if type(inp) != int:
-            # choice is not in action array
-            if inp.lower() not in lower_actions:
-                print(f"{inp} is not an available action, please try again.")
-                continue
-            else: # valid input
-                choice = actions[lower_actions.index(inp.lower())]
-                break
-        # choice is a number
-        if inp < 0 or inp >= len(actions):
-            # out of range
-            print(f"{inp} is out of range of the choice IDs, please try again.")
-            continue
-        else:
-            choice = actions[inp]
-            break
+    choice = get_valid_input(f"> Select an action by its {green}ID{reset} or {yellow}name{reset}: ", actions, True, False)
     return choice
         
 
@@ -146,11 +182,28 @@ def load_module(module: str):
     else:
         print(f"{module} does not have a solver() function.")
 
+
+def change_settings():
+    settings_table = table.Table(title="Settings")
+    settings_table.add_column("Setting", justify="right", style="green")
+    settings_table.add_column("Value", justify="left", style="yellow")
+    for setting, value in settings.items():
+        settings_table.add_row(setting, value)
+
+    console.print(settings_table)
+    choice = get_valid_input(f"> Select the setting you want to change by its {green}ID{reset} or {yellow}name{reset}: ", list(settings.keys()), True, err_word="setting")
+    if choice == "\0":
+        return
+    settings[choice] = input(f"Enter the new value for {choice}: ")
+    json.dump(settings, open("settings.json", "w"))
+
+
 def main():
     os.system("cls" if os.name == "nt" else "clear")  # ps supports `clear` but this is here just in case
 
     while True:
         refresh_modules()
+        update_settings()
         match action_select():
             case "Select a module":
                 module = module_select()
@@ -162,7 +215,7 @@ def main():
             case "Change settings":  # possibly tag system? (settings + search)
                 print("not implemented yet")  # todo: print box with all settings and values, get user input as id or str, prompt for new value
             case "Print user guide":
-                print("not implemented yet")  # todo: print user guide (string with formatting)
+                print(tutorial_str)
             case "Exit":
                 print("Exiting...")
                 exit(0)
