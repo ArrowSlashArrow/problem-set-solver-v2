@@ -192,8 +192,8 @@ def refresh_modules():
             print(f"Could not access {module_files[m]}: Not found in /modules (how did you move this shit out of modules/ already??)")
         except PermissionError:
             print(f"Could not access {module_files[m]}: Permission denied")
-        # except Exception as e:
-        #     print(f"couldnt read {module_files[m]} cuz {e}")
+        except Exception as e:
+            print(f"couldnt read {module_files[m]} cuz {e}")
 
         # get the rest of metadata
         current_module.filename = module_files[m]
@@ -202,10 +202,6 @@ def refresh_modules():
         modules.append(current_module)
         module_names.append(current_module.name)
     
-    # dbg lines
-    print("########### THE KYS ARRAY ##########")
-    for m in modules:
-        print(m)
     print(f"Loaded {len(modules)} modules successfully")
 
 
