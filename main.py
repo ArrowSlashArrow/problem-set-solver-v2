@@ -1,4 +1,4 @@
-import os, importlib.util, json, easygui, shutil
+import os, importlib.util, json, easygui, shutil, copy
 from rich import console, table, prompt
 
 # nicer way of storing modules
@@ -22,6 +22,7 @@ class Module:
         md_dict["version"] = self.version
 
         return json.dumps(md_dict, indent=4)
+
 
 
 default_module = Module("file", "<Unknown>", "<No description>", [], "<Unknown>", None)
@@ -81,7 +82,7 @@ titles = {  # constant
     "Module Name": {"style": "green", "justify": "right"},
     "Module Description": {"style": "yellow", "justify": "left"},
     "Tags": {"style": "red", "justify": "left"},
-    "Version": {"style": "purple", "justify": "left"}
+    "Version": {"style": "purple", "justify": "right"}
 }
 
 # settings
@@ -150,7 +151,7 @@ def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=F
 
 
 def get_metadata(file: str):
-    current_module = default_module
+    current_module = copy.deepcopy(default_module)
     ignore = False
     with open(file, "r") as f:
         lines = f.read().split("\n")
@@ -180,7 +181,7 @@ def refresh_modules():
     # populate arrays from /modules
     for m in range(len(module_files)):
         # get metadata from within file
-        current_module = default_module
+        current_module = copy.deepcopy(default_module)
 
         try:
             meta = get_metadata(f"modules/{module_files[m]}")
@@ -204,7 +205,7 @@ def refresh_modules():
     # dbg lines
     print("########### THE KYS ARRAY ##########")
     for m in modules:
-        print(modules)
+        print(m)
     print(f"Loaded {len(modules)} modules successfully")
 
 
