@@ -24,7 +24,6 @@ class Module:
         return json.dumps(md_dict, indent=4)
 
 
-
 default_module = Module("file", "<Unknown>", "<No description>", [], "<Unknown>", None)
 
 # unpack function for list[Module] -> good data for new_table() 
@@ -46,7 +45,6 @@ def get_module_data(modules: list[Module]):
 # intialize rich console and module table arrays
 console = console.Console()
 modules = []
-module_name = []
 
 # ansi colours
 reset = "\x1b[0m"
@@ -70,10 +68,11 @@ If you want to create your own module, follow the instructions below:
  - the name of the module in this format: {bold}# name: [Name] {reset}
  - a description of the module in this format: {bold}# description: some module {reset}
  - tags for the module in this format: {bold}# tags: tag1, tag2, tag3 {reset}
-    - these tags must be separated by a comma and a space: ", "
+    * these tags must be separated by a comma and a space: ", "
+ - optionally a version
 3. put it in the /modules folder or import it through the program 
 
-{reset}{italic}{grey}Made by </> (arrow) on 2025/03/19, last updated v0.1.1{reset}
+{reset}{italic}{grey}Made by </> (arrow) on 2025/03/19, last updated on v0.2.0 at 2025/03/24{reset}
 """  # add stuff later when added
 
 # module table
@@ -164,20 +163,19 @@ def get_metadata(file: str):
                 current_module.tags = line.split("# tags: ")[1].split(", ")
             if "# version: " in line:
                 current_module.version = int(line.split("# version: ")[1])
-            if "# ignore" in line.lower():
+            if settings["ignore_str"] in line.lower():
                 ignore = True
     return current_module if not ignore else "IGNORE"
 
 
 def refresh_modules():
-    global modules, module_names
+    global modules
     # TODO: update old modules (version number)
     # TODO: ingore modules if there is # IGNORE in metadata
     # TODO: include a utils.py file in modules/ that has common functions
     module_files = [m for m in os.listdir("modules") if m.endswith(".py") and os.path.isfile(f"modules/{m}")]
 
     modules = []
-    module_names = []
     # populate arrays from /modules
     for m in range(len(module_files)):
         # get metadata from within file
@@ -200,7 +198,6 @@ def refresh_modules():
         current_module.id = m
        
         modules.append(current_module)
-        module_names.append(current_module.name)
     
     print(f"Loaded {len(modules)} modules successfully")
 
@@ -218,24 +215,27 @@ def module_select():
     # update table at execution time to account for imported modules
     update_module_table()
     console.print(module_table)
+
+    module_names = [m.name for m in modules]
     
     choice = get_valid_input(f"> Select a module by {cyan}ID{reset} or {green}name{reset}: ", module_names, True, "module")
     if choice == "\0":
         return
     # map choice index to module
     choice_index = module_names.index(choice)
-    return modules[choice_index].filename
+    return modules[choice_index]
 
 
 """
 All actions:
 - Select a module [DONE]
-- Import module from file
+- List all modules [DONE]
+- Update a module [SERVER]
+- Update all modules [SERVER]
+- Remove a module [DONE] 
+- Import module from file [DONE]
 - Import module from server [SERVER]
 - Export module to server [SERVER]
-- update a module [SERVER]
-- update all modules [SERVER]
-- remove a module 
 - print all available modules on server [SERVER]
 - Change settings [DONE]
 - Print user guide [DONE]
@@ -243,7 +243,8 @@ All actions:
 """
 
 def action_select():
-    actions = ["Select a module", "Import module from file", "Import module from server", "Export a module to server", "Update a module", "Update all modules", "Remove a module", "Print all importable modules", "Change settings", "Print user guide", "Exit"]
+    actions = ['Select a module', 'List all modules', 'Update a module', 'Update all modules', 'Remove a module', 'Import module from file', 'Import module from server', 'Export module to server', 'Print all modules on server', 'Change settings', 'Print user guide', 'Exit']
+
     lower_actions = [a.lower() for a in actions]
     ids = [str(i) for i in range(len(actions))]
     titles = {
@@ -270,12 +271,15 @@ def check_module(path: str):
         return None
 
 
-def load_module(module: str):
-    module = check_module(f"modules/{module}")
-    if module:
-        module.solver()
+def load_module(module: Module):
+    module_obj = check_module(f"modules/{module.filename}")
+    if module_obj:
+        try:
+            module_obj.solver()
+        except Exception as e:
+            print(f"{red}{module.name} crashed :({reset}")
     else:
-        print(f"{module} does not have a solver() function. unable to run module.")
+        print(f"{module.name} does not have a solver() function. Unable to run module.")
 
 
 def change_settings():
@@ -302,9 +306,12 @@ def server_module_select():
 
 def local_file_select():
     # get file
-    selected_file = easygui.fileopenbox()
-    filename = selected_file.split("/")[-1]
-
+    try:
+        selected_file = easygui.fileopenbox()
+        filename = selected_file.split("/")[-1]
+    except Exception as e:
+        print("Unable to open file dialog")
+    
     # filter out bad input
     if ~filename.endswith(".py"):
         print("Invalid input file. Please select a .py file.")
@@ -313,7 +320,7 @@ def local_file_select():
     # check if it is already in the modules directory
     if filename in os.listdir("modules"):
         choice = prompt.Prompt.ask(f"{filename} is already in the modules directory. Do you want to replace it? [yes/no]: ")
-        if choice == "no" or not choice:
+        if choice.lower() == "no" or not choice:
             return
     
     # check for solver function
@@ -327,16 +334,28 @@ def local_file_select():
         print(f"Could not read {selected_file} because {e}")
 
 
+def delete_module():
+    module = module_select()
+    if settings["confirm_delete"]:
+        if not prompt.Prompt.ask(f"Are you sure you want to delete {module.name} ({module.filename})?"):
+            return
+    os.remove(f"modules/{module.filename}")
+
+
 def action_controller(action: str):
     match action:
         case "Select a module":
             module = module_select()
-            print(f"\n-----------[ {green}Start of {module} {reset}]-----------")
-            load_module(f"{module}")
-            print(f"------------[ {red}End of {module} {reset}]------------\n")
+            print(f"\n-----------[ {green}Start of {module.name} {reset}]-----------")
+            load_module(module)
+            print(f"------------[ {red}End of {module.name} {reset}]------------\n")
+        case "List all modules":
+            update_module_table()
+            console.print(module_table)
         case "Import module from file":
             local_file_select()
         case "Import module from server":
+            server_module_select()
             print("not implemented yet")  # todo: prompt user with input dialog: get valid input (valid_inputs = modules.txt on server) -> download module from server -> add to /modules
         case "Export a module to server":
             print("not implemented yet")
@@ -345,8 +364,8 @@ def action_controller(action: str):
         case "Update all modules":
             print("not implemented yet")
         case "Remove a module":
-            print("not implemented yet")
-        case "Print all importable modules":
+            delete_module()
+        case "Print all modules on server":
             print("not implemented yet")
         case "Change settings":  # TODO: implement filtering by tags
             change_settings()

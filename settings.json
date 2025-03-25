@@ -1,4 +1,6 @@
 {
     "filter_tags": "['test']",
-    "module_server": "192.186.0.1"
+    "module_server": "192.186.0.1",
+    "confirm_delete": true,
+    "ignore_str": "# ignore_module"
 }

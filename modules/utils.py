@@ -1,5 +1,5 @@
 # utility file for modules
-# ignore
+# ignore_module
 
 def solver():
     print("your mum")
