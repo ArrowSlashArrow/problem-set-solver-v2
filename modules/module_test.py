@@ -1,7 +1,8 @@
 # name: Test
 # description: test module for the module system
+# tags: example, alg2, basic
 # made by arrow on 2025/03/19
-# todo: tag system
+# version: 1
 
 def solver():
     # example
