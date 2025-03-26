@@ -1,4 +1,4 @@
-import os, importlib.util, json, easygui, shutil, copy
+import os, importlib.util, json, easygui, shutil, copy, time
 from rich import console, table, prompt
 
 # nicer way of storing modules
@@ -61,6 +61,16 @@ tutorial_str = f"""
 Welcome to the module system tutorial!
 To select an action, type its {yellow}name{reset} or its corresponding {green}ID{reset}.
 If you want to go back to the action selection, type {cyan}back{reset}.
+If you can't see any modules, cehck your tags in the settings.
+
+List of current settings:
+{green}filter_tags{reset} (list): {yellow} A list of tags that modules are filtered by. Modules without these tags will not show up in the module selection. {reset}
+{green}module_server{reset} (IPv4 Address): {yellow} The server that stores modules. By default, it is XXX.XXX.XXX.XXX{reset}
+{green}confirm_delete{reset} (True / False): {yellow} Confirms with user before deleting a module. True by default {reset}
+{green}ignore_str{reset} (string): {yellow} A string that modules are filtered by. 
+Modules with this string in their code will not show up in the module selection. {reset}
+{green}ignore_filter{reset} (True / False): {yellow} Toggles the previous setting. True by default. {reset} 
+
 
 If you want to create your own module, follow the instructions below:
 1. Create a new python file (.py)
@@ -72,8 +82,20 @@ If you want to create your own module, follow the instructions below:
  - optionally a version
 3. put it in the /modules folder or import it through the program 
 
-{reset}{italic}{grey}Made by </> (arrow) on 2025/03/19, last updated on v0.2.0 at 2025/03/24{reset}
+{reset}{italic}{grey}Made by </> (arrow) on 2025/03/19, last updated on v0.2.1 at 2025/03/26{reset}
 """  # add stuff later when added
+
+# name, desc, tags, version, 
+boilerplate = """# name: <NAME>
+# description: <DESC>
+# tags: <TAGS>
+# version: 1
+# made by <USER> on <DATE>
+import utils
+
+def solver():
+    pass
+"""
 
 # module table
 titles = {  # constant
@@ -86,20 +108,13 @@ titles = {  # constant
 
 # settings
 settings = {}
+setting_data = {}
 
 def update_settings():
-    global settings
-    settings = json.load(open("settings.json", "r"))
-
-
-def display_settings():
-    settings_table = table.Table(title="Settings")
-    settings_table.add_column("Setting", justify="right", style="green")
-    settings_table.add_column("Value", justify="left", style="yellow")
-    for setting, value in settings.items():
-        settings_table.add_row(setting, value)
-
-    console.print(settings_table)
+    global settings, setting_data
+    raw_settings = json.load(open("settings.json", "r"))
+    settings = {k: v[1] for k, v in raw_settings.items()}
+    setting_data = {k: v[0] for k, v in raw_settings.items()}
 
 
 # parse num util function
@@ -170,9 +185,7 @@ def get_metadata(file: str):
 
 def refresh_modules():
     global modules
-    # TODO: update old modules (version number)
-    # TODO: ingore modules if there is # IGNORE in metadata
-    # TODO: include a utils.py file in modules/ that has common functions
+    # TODO: update old modules (version number) when downloading
     module_files = [m for m in os.listdir("modules") if m.endswith(".py") and os.path.isfile(f"modules/{m}")]
 
     modules = []
@@ -226,12 +239,13 @@ def module_select():
     return modules[choice_index]
 
 
-"""
+""" do we use a @server decorator for auth and session handling?
 All actions:
 - Select a module [DONE]
 - List all modules [DONE]
 - Update a module [SERVER]
 - Update all modules [SERVER]
+- Create a new module [DONE]
 - Remove a module [DONE] 
 - Import module from file [DONE]
 - Import module from server [SERVER]
@@ -243,9 +257,8 @@ All actions:
 """
 
 def action_select():
-    actions = ['Select a module', 'List all modules', 'Update a module', 'Update all modules', 'Remove a module', 'Import module from file', 'Import module from server', 'Export module to server', 'Print all modules on server', 'Change settings', 'Print user guide', 'Exit']
+    actions = ['Select a module', 'List all modules', 'Update a module', 'Update all modules', 'Create a new module', 'Remove a module', 'Import module from file', 'Import module from server', 'Export module to server', 'Print all modules on server', 'Change settings', 'Print user guide', 'Exit']
 
-    lower_actions = [a.lower() for a in actions]
     ids = [str(i) for i in range(len(actions))]
     titles = {
         "ID": {"style": "green", "justify": "right"},
@@ -287,10 +300,13 @@ def change_settings():
     settings_table.add_column("ID", justify="right", style="cyan")
     settings_table.add_column("Setting", justify="left", style="green")
     settings_table.add_column("Value", justify="left", style="yellow")
-    id = 0
-    for setting, value in settings.items():
-        settings_table.add_row(str(id), setting, f"{value}")
-        id += 1
+    settings_table.add_column("Data Type", justify="left", style="red")
+    
+    for i in range(len(settings)):
+        setting = list(settings.keys())[i]
+        value = str(settings[setting])
+        data_type = str(setting_data[setting])
+        settings_table.add_row(str(i), setting, value, data_type)
 
     console.print(settings_table)
     choice = get_valid_input(f"> Select the setting you want to change by its {cyan}ID{reset} or {green}name{reset}: ", list(settings.keys()), True, err_word="setting")
@@ -342,6 +358,31 @@ def delete_module():
     os.remove(f"modules/{module.filename}")
 
 
+def create_module():
+    filename = input("> Enter the filename of the new module: ")
+    if filename.endswith(".py"):
+        filename = filename[:-3]  # remove .py
+    content = copy.copy(boilerplate)
+
+    name = input("> Enter the name of the module: ")
+    description = input("> Enter the description for this module: ")
+    tags = ", ".join(sorted(list(set([t.rstrip().lstrip() for t in input("> Enter tags separated by commas: ").split(",") if t]))))
+    user = "this guy :)"  # use username when user and session feature is working with the server
+    date = time.strftime("%Y/%m/%d", time.localtime())
+
+    # put all the data into the boilerplate
+    content = content.replace("<USER>", user)
+    content = content.replace("<NAME>", name)
+    content = content.replace("<DESC>", description)
+    content = content.replace("<TAGS>", tags)
+    content = content.replace("<DATE>", date)
+
+    with open(f"modules/{filename}.py", "w") as f:
+        f.write(content)
+
+    print(f"successfully created {filename}.py")
+
+
 def action_controller(action: str):
     match action:
         case "Select a module":
@@ -363,6 +404,8 @@ def action_controller(action: str):
             print("not implemented yet")
         case "Update all modules":
             print("not implemented yet")
+        case "Create a new module":
+            create_module()
         case "Remove a module":
             delete_module()
         case "Print all modules on server":
