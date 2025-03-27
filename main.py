@@ -1,4 +1,4 @@
-import os, importlib.util, json, easygui, shutil, copy, time
+import os, importlib.util, json, easygui, shutil, copy, time, cloudscraper
 from rich import console, table, prompt
 
 # nicer way of storing modules
@@ -367,7 +367,7 @@ def create_module():
     name = input("> Enter the name of the module: ")
     description = input("> Enter the description for this module: ")
     tags = ", ".join(sorted(list(set([t.rstrip().lstrip() for t in input("> Enter tags separated by commas: ").split(",") if t]))))
-    user = "this guy :)"  # use username when user and session feature is working with the server
+    user = input("> Enter your username: ")
     date = time.strftime("%Y/%m/%d", time.localtime())
 
     # put all the data into the boilerplate
@@ -382,6 +382,91 @@ def create_module():
 
     print(f"successfully created {filename}.py")
 
+
+## SERVER STUFF ##
+session = None
+scraper = cloudscraper.create_scraper()
+online = False
+last_ping = 0
+
+headers = {
+    "Content-Type": "application/json"
+}
+
+# payloads:
+# "ping": {} -> pong
+# "session": {"pwd": password} -> session
+# "gitfetch": {"session": session} -> ?
+# "version": {"mod": [module names], "session": session} -> version number(s)
+# "install": {"mod": [module names], "session": session} -> module file(s)
+# "list": {include_ignores: bool, "session": session} -> list of all modules on server
+
+
+# returns true if server is online
+def test_ping():
+    global last_ping
+    req = scraper.get(f"https://{settings['module_server']}")
+    last_ping = time.time()
+    match req.status_code:
+        case 200:
+            print(f"Server {settings['module_server']} is online")
+            return True
+        case 523:
+            print(f"Server {settings['module_server']} is offline / unreachable")
+            return False
+
+
+def get_session():
+    global session
+    pw = settings["server_pw"]
+    if len(pw) <= 0: 
+        pw = input("Enter password for server: ")
+    payload = {"action": "session", "pwd": pw}
+    req = scraper.get(f"https://{settings['module_server']}/login", data=json.dumps(payload), headers=headers)
+    success = json.loads(req.text)["success"]
+    if success == 0:
+        print("Invalid password; unable to generate session")
+        return
+    session = json.loads(req.text)["data"]
+
+
+def reconnect():
+    if last_ping + 60 < time.time():
+        print("Server is offline. Unable to perform action.")
+        return "no"
+    else:
+        print("Server is offline. Attempting to reconnect...")
+        online = test_ping()
+        if not online:
+            return "no"
+
+
+def server_required(func):
+    def wrapper(*args, **kwargs):
+        # check if server is online
+        if not online:
+            if reconnect() == "no":
+                return
+
+        # assumes server is online
+        if not session:
+            session = get_session()
+        func(*args, **kwargs)
+    return wrapper
+
+
+@server_required
+def list_modules():
+    include_ignores = False if input("> List ignore modules as well? [y/n]").lower()[0] == "n" else True
+    payload = {"action": "list", "session": session, "include_ignores": include_ignores}
+    req = scraper.get(f"https://{settings['module_server']}/modules", data=json.dumps(payload), headers=headers)
+    response = json.loads(req.text)
+    if response["success"] == 0:
+        print(f"Could not list modules.")
+    else:
+        print(f"{response['data']}")  # todo: format modulse into table
+
+# todo: do this when the server is online to test it
 
 def action_controller(action: str):
     match action:
@@ -420,12 +505,14 @@ def action_controller(action: str):
 
 
 def main():
+    global online
     os.system("cls" if os.name == "nt" else "clear") 
+    update_settings()
+    online = test_ping()
 
     while True:
-        update_settings()
         action_controller(action_select())
-        
+        update_settings()
 
 if __name__ == "__main__":
     main()

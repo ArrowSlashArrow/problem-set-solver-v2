@@ -1,6 +1,7 @@
 {
     "filter_tags": ["list", "test"],
-    "module_server": ["ip", "192.168.0.0"],
+    "module_server": ["domain", "pmodmgr.bitfeller.uk"], 
+    "server_pw": ["string", ""],
     "confirm_delete": ["boolean", true],
     "ignore_str": ["string", "# ignore_module"],
     "ignore_filter": ["boolean", true]
