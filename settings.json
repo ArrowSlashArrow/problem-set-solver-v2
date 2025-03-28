@@ -1,8 +1,26 @@
 {
-    "filter_tags": ["list", "test"],
-    "module_server": ["domain", "pmodmgr.bitfeller.uk"], 
-    "server_pw": ["string", ""],
-    "confirm_delete": ["boolean", true],
-    "ignore_str": ["string", "# ignore_module"],
-    "ignore_filter": ["boolean", true]
+    "filter_tags": [
+        "list",
+        "test"
+    ],
+    "module_server": [
+        "domain",
+        "pmodmgr.bitfeller.uk"
+    ],
+    "server_pw": [
+        "string",
+        ""
+    ],
+    "confirm_delete": [
+        "True",
+        true
+    ],
+    "ignore_str": [
+        "string",
+        "# ignore_module"
+    ],
+    "ignore_filter": [
+        "boolean",
+        true
+    ]
 }
