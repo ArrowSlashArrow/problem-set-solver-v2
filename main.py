@@ -82,7 +82,7 @@ If you want to create your own module, follow the instructions below:
  - optionally a version
 3. put it in the /modules folder or import it through the program 
 
-{reset}{italic}{grey}Made by </> (arrow) on 2025/03/19, last updated on v0.2.1 at 2025/03/26{reset}
+{reset}{italic}{grey}Made by </> (arrow) on 2025/03/19, last updated on v0.3.0 at 2025/03/26{reset}
 """  # add stuff later when added
 
 # name, desc, tags, version, 
@@ -109,6 +109,16 @@ titles = {  # constant
 # settings
 settings = {}
 setting_data = {}
+
+def pack_dicts(*args):
+    keys = [list(arg.keys()) for arg in args]
+    if len(set(map(tuple, keys))) != 1:
+        return args[0]
+    keys = keys[0]
+    values = [list(arg.values()) for arg in args]
+    vals = list(map(list, zip(*values)))
+    return {k: v for k, v in zip(keys, vals)}
+
 
 def update_settings():
     global settings, setting_data
@@ -307,6 +317,7 @@ def change_settings():
         setting = list(settings.keys())[i]
         value = str(settings[setting])
         data_type = str(setting_data[setting])
+
         settings_table.add_row(str(i), setting, value, data_type)
 
     console.print(settings_table)
@@ -314,7 +325,7 @@ def change_settings():
     if choice == "\0":
         return
     settings[choice] = input(f"Enter the new value for {choice}: ")
-    json.dump(settings, open("settings.json", "w"))
+    json.dump(pack_dicts(settings, setting_data), open("settings.json", "w"), indent=4)
 
 
 def server_module_select():
