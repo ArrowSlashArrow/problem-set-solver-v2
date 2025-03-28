@@ -1,4 +1,4 @@
-import os, importlib.util, json, easygui, shutil, copy, time, cloudscraper
+import os, importlib.util, json, easygui, shutil, copy, time, requests
 from rich import console, table, prompt
 
 # nicer way of storing modules
@@ -232,7 +232,7 @@ def module_select():
     module_names = [m.name for m in modules]
     
     choice = get_valid_input(f"> Select a module by {cyan}ID{reset} or {green}name{reset}: ", module_names, True, "module")
-    if choice == "\0":
+    if choice == "\0":  
         return
     # map choice index to module
     choice_index = module_names.index(choice)
@@ -295,6 +295,7 @@ def load_module(module: Module):
         print(f"{module.name} does not have a solver() function. Unable to run module.")
 
 
+# todo: whole lotta settings (for a whole loota things)
 def change_settings():
     settings_table = table.Table(title="Settings")
     settings_table.add_column("ID", justify="right", style="cyan")
@@ -385,9 +386,10 @@ def create_module():
 
 ## SERVER STUFF ##
 session = None
-scraper = cloudscraper.create_scraper()
 online = False
 last_ping = 0
+
+
 
 headers = {
     "Content-Type": "application/json"
@@ -401,48 +403,117 @@ headers = {
 # "install": {"mod": [module names], "session": session} -> module file(s)
 # "list": {include_ignores: bool, "session": session} -> list of all modules on server
 
+payloads = {
+    "ping": [],
+    "pong": [],  
+    "session": ["pwd"],
+    "gitfetch": ["session"],
+    "version": ["mod", "session"],
+    "metadata": ["mod", "session"],
+    "install": ["mod", "session"],
+    "upload": ["mod", "session"],
+    "list": ["include_ignores", "session"]
+}
+
+
+def get_bool(msg):
+    return input(msg).lower()[0] == "y"
+
+
+def get_server_pw():
+    pw = settings["server_pw"]
+    if len(pw) <= 0: 
+        pw = input("Enter password for server: ")
+    return pw
+
+def format_payload(payload: str):
+    global session
+    if payload not in payloads:
+        return
+    
+    ready_payload = {
+        "action": payload
+    }
+
+    match payload:
+        case "session":
+            ready_payload["pwd"] = get_server_pw()
+        case "list":
+            ready_payload["session"] = session
+        case "install":
+            ready_payload["session"] = session
+            ready_payload["mod"] = [m.rstrip().lstrip() for m in input("> Enter the module to install (or multiple separated by commas)").split(",")] 
+        case "gitfetch":
+            ready_payload["session"] = session
+        case "version":
+            ready_payload["session"] = session
+            ready_payload["mod"] = [m.rstrip().lstrip() for m in input("> Enter the module to install (or multiple separated by commas)").split(",")] 
+        case "metadata":
+            ready_payload["session"] = session
+            ready_payload["mod"] = [m.rstrip().lstrip() for m in input("> Enter the module to install (or multiple separated by commas)").split(",")] 
+        case "upload":
+            ready_payload["session"] = session
+            ready_payload["overrideVersion"] = get_bool("> Override the existing module's version number? [y/n]: ")
+            ready_payload["overrideMod"] = get_bool("> Override the module if it exists on the server? [y/n]: ")
+            selected_module = module_select().filename 
+            with open(f"modules/{selected_module}", "r") as f:
+                ready_payload["data"] = f.read()
+            ready_payload["filename"] = selected_module
+        case _:
+            pass
+
+    print("sending payload:", ready_payload)
+    return ready_payload
 
 # returns true if server is online
 def test_ping():
     global last_ping
-    req = scraper.get(f"https://{settings['module_server']}")
+    req = requests.post(f"https://{settings['module_server']}", json=format_payload("ping"), headers=headers)
     last_ping = time.time()
+
+    # display appropriate message according ot stateus code
     match req.status_code:
         case 200:
-            print(f"Server {settings['module_server']} is online")
+            print(f"Server {settings['module_server']} is online ({req.status_code})")
             return True
         case 523:
             print(f"Server {settings['module_server']} is offline / unreachable")
             return False
-
+        case 400:
+            print(f"Bad requests: {req.status_code}") 
+        case _:
+            print(f"Unknown error: {req.status_code} (server told you to kys)")
 
 def get_session():
-    global session
-    pw = settings["server_pw"]
-    if len(pw) <= 0: 
-        pw = input("Enter password for server: ")
-    payload = {"action": "session", "pwd": pw}
-    req = scraper.get(f"https://{settings['module_server']}/login", data=json.dumps(payload), headers=headers)
+    payload = format_payload("session")
+    req = requests.post(f"https://{settings['module_server']}",json=payload, headers=headers)
+
+    # parse response
     success = json.loads(req.text)["success"]
+
     if success == 0:
         print("Invalid password; unable to generate session")
         return
     session = json.loads(req.text)["data"]
 
+    return session
+
+
 
 def reconnect():
     if last_ping + 60 < time.time():
         print("Server is offline. Unable to perform action.")
-        return "no"
     else:
         print("Server is offline. Attempting to reconnect...")
         online = test_ping()
-        if not online:
-            return "no"
+        if online:
+            return "yes"
+    return "no"
 
 
 def server_required(func):
     def wrapper(*args, **kwargs):
+        global session
         # check if server is online
         if not online:
             if reconnect() == "no":
@@ -457,16 +528,17 @@ def server_required(func):
 
 @server_required
 def list_modules():
-    include_ignores = False if input("> List ignore modules as well? [y/n]").lower()[0] == "n" else True
-    payload = {"action": "list", "session": session, "include_ignores": include_ignores}
-    req = scraper.get(f"https://{settings['module_server']}/modules", data=json.dumps(payload), headers=headers)
+    # send payload
+    payload = format_payload("list")
+    req = requests.post(f"https://{settings['module_server']}/", json=payload, headers=headers)
+
     response = json.loads(req.text)
+    print("list_modules response:", response)
     if response["success"] == 0:
         print(f"Could not list modules.")
     else:
         print(f"{response['data']}")  # todo: format modulse into table
 
-# todo: do this when the server is online to test it
 
 def action_controller(action: str):
     match action:
@@ -494,7 +566,7 @@ def action_controller(action: str):
         case "Remove a module":
             delete_module()
         case "Print all modules on server":
-            print("not implemented yet")
+            list_modules()
         case "Change settings":  # TODO: implement filtering by tags
             change_settings()
         case "Print user guide":
