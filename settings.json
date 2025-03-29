@@ -1,7 +1,7 @@
 {
     "filter_tags": [
         "list",
-        "test"
+        "your mum"
     ],
     "module_server": [
         "domain",
@@ -9,10 +9,10 @@
     ],
     "server_pw": [
         "string",
-        ""
+        "yourmum567%^&*"
     ],
     "confirm_delete": [
-        "True",
+        "boolean",
         true
     ],
     "ignore_str": [
