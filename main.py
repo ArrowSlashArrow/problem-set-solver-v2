@@ -1,5 +1,5 @@
-import os, importlib.util, json, easygui, shutil, copy, time, cloudscraper
-from rich import console, table, prompt
+import os, importlib.util, json, easygui, shutil, copy, time, requests, ping3
+from rich import console, table
 
 # nicer way of storing modules
 # also python law dictates that every main.py must have at least one struct
@@ -82,8 +82,40 @@ If you want to create your own module, follow the instructions below:
  - optionally a version
 3. put it in the /modules folder or import it through the program 
 
-{reset}{italic}{grey}Made by </> (arrow) on 2025/03/19, last updated on v0.3.0 at 2025/03/26{reset}
+{reset}{italic}{grey}Made by </> (arrow) on 2025/03/19, last updated on v0.3.2 at 2025/03/29{reset}
 """  # add stuff later when added
+
+"""
+All actions:
+- Select a module [DONE]
+- List all modules [DONE]
+- Update a module [SERVER]
+- Update all modules [SERVER]
+- Create a new module [DONE]
+- Remove a module [DONE] 
+- Import module from file [DONE]
+- Import module from server [DONE]
+- Export module to server [DONE]
+- print all available modules on server [DONE]
+- Change settings [DONE]
+- Print user guide [DONE]
+- Exit [DONE]
+"""
+actions = {  # shorthand
+    "Select a module": "sel",
+    "List all modules": "ls",
+    "Update a module": "upd",
+    "Update all modules": "updall",
+    "Create a new module": "touch",
+    "Remove a module": "rem",
+    "Import module from file": "fimport",
+    "Import module from server": "simport",
+    "Export module to server": "ex",
+    "Print all modules on server": "sls",
+    "Change settings": "cfg",
+    "Print user guide": "guide",
+    "Exit": "x"
+}
 
 # name, desc, tags, version, 
 boilerplate = """# name: <NAME>
@@ -110,6 +142,8 @@ titles = {  # constant
 settings = {}
 setting_data = {}
 
+# wanted to refactor this but couldn't
+# if it works, don't touch it
 def pack_dicts(*args):
     keys = [list(arg.keys()) for arg in args]
     if len(set(map(tuple, keys))) != 1:
@@ -119,7 +153,7 @@ def pack_dicts(*args):
     vals = list(map(list, zip(*values[::-1])))
     return {k: v for k, v in zip(keys, vals)}
 
-
+# update the various settings arrays
 def update_settings():
     global settings, setting_data
     raw_settings = json.load(open("settings.json", "r"))
@@ -151,45 +185,62 @@ def new_table(name: str, titles: dict, rows: list[list]):
     return module_table
 
 
-def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=False, back_enabled : bool=True, err_word: str="input"):
+def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=False, back_enabled : bool=True, err_word: str="input", many=False):
     valid_inputs.extend([str(i) for i in range(len(valid_inputs))] if indices else [])
-    choice = ""
-    while True:
-        inp = input(input_message).rstrip()
-        if inp == "back" and back_enabled:
-            choice = "\0"
-            break
-        
-        if inp not in valid_inputs:
-            print(f"{inp} is not a valid {err_word}, please try again.")
-            continue
+    if not many:
+        choice = ""
+        while True:
+            inp = input(input_message).rstrip().lstrip()
+            if inp == "back" and back_enabled:
+                choice = "\0"
+                break
+            
+            if inp not in valid_inputs:
+                print(f"{inp} is not a valid {err_word}, please try again.")
+                continue
+            
+            if indices and type(parse_num(inp)) == int:
+                choice = valid_inputs[int(inp)]
+                break
+            else:
+                choice = inp
+                break
+        print(choice)
+        return choice
+    else:
+        choices = []
+        inp = [i.lstrip().rstrip() for i in input(input_message).split(",")]
+        for i in inp:
+            # skip over the input if it is invalid
+            if i not in valid_inputs:
+                continue
 
-        if indices and type(parse_num(inp)) == int:
-            choice = valid_inputs[int(inp)]
-            break
-        else:
-            choice = inp
-            break
+            if indices and type(parse_num(i)) == int:
+                choices.append(valid_inputs[int(i)])
+                break
+            else:
+                choices.append(i)
+                break
+        return choices
 
-    return choice
 
-
-def get_metadata(file: str):
+def get_metadata(file: str, raw_data=False):
     current_module = copy.deepcopy(default_module)
     ignore = False
-    with open(file, "r") as f:
-        lines = f.read().split("\n")
-        for line in lines:
-            if "# name: " in line:
-                current_module.name = line.split("# name: ")[1]
-            if "# description: " in line:
-                current_module.description = line.split("# description: ")[1]
-            if "# tags: " in line:  
-                current_module.tags = line.split("# tags: ")[1].split(", ")
-            if "# version: " in line:
-                current_module.version = int(line.split("# version: ")[1])
-            if settings["ignore_str"] in line.lower():
-                ignore = True
+    raw_data = open(file, "r").read() if raw_data else file
+
+    lines = raw_data.split("\n")
+    for line in lines:
+        if "# name: " in line:
+            current_module.name = line.split("# name: ")[1]
+        if "# description: " in line:
+            current_module.description = line.split("# description: ")[1]
+        if "# tags: " in line:  
+            current_module.tags = line.split("# tags: ")[1].split(", ")
+        if "# version: " in line:
+            current_module.version = int(line.split("# version: ")[1])
+        if settings["ignore_str"] in line.lower():
+            ignore = True
     return current_module if not ignore else "IGNORE"
 
 
@@ -249,35 +300,31 @@ def module_select():
     return modules[choice_index]
 
 
-""" do we use a @server decorator for auth and session handling?
-All actions:
-- Select a module [DONE]
-- List all modules [DONE]
-- Update a module [SERVER]
-- Update all modules [SERVER]
-- Create a new module [DONE]
-- Remove a module [DONE] 
-- Import module from file [DONE]
-- Import module from server [SERVER]
-- Export module to server [SERVER]
-- print all available modules on server [SERVER]
-- Change settings [DONE]
-- Print user guide [DONE]
-- Exit [DONE]
-"""
-
 def action_select():
-    actions = ['Select a module', 'List all modules', 'Update a module', 'Update all modules', 'Create a new module', 'Remove a module', 'Import module from file', 'Import module from server', 'Export module to server', 'Print all modules on server', 'Change settings', 'Print user guide', 'Exit']
+    shorthand = list(actions.values())
+    full_actions = list(actions.keys())
+    lower_actions = [a.lower() for a in full_actions]
 
     ids = [str(i) for i in range(len(actions))]
     titles = {
         "ID": {"style": "green", "justify": "right"},
         "Action": {"style": "yellow", "justify": "left"}
     }
-    action_table_data = [ids, actions]
+    action_table_data = [ids, full_actions]
+    if settings["shorthand_actions"]:
+        titles["Shorthand"] = {"style": "red", "justify": "left"}
+        action_table_data.append(shorthand)
+
     action_table = new_table("Actions", titles, action_table_data)
     console.print(action_table)
-    choice = get_valid_input(f"> Select an action by its {green}ID{reset} or {yellow}name{reset}: ", actions, True, False)
+    available_actions = copy.copy(lower_actions)
+    available_actions.extend(shorthand)
+    choice = get_valid_input(f"> Select an action by its {green}ID{reset} or {yellow}name{reset}{f' or {red}shorthand{reset}'}: ", available_actions, indices=True)
+    
+    if choice in shorthand:
+        choice = full_actions[shorthand.index(choice)]
+    elif choice in lower_actions:
+        choice = full_actions[lower_actions.index(choice)]
     return choice
         
 
@@ -306,7 +353,7 @@ def load_module(module: Module):
 
 
 def boolstr(s: str):
-    return s.lower() in ("true", "yes", "ye", "0", "yep", "yea", "yeah")
+    return s.lower() in ("true", "yes", "ye", "1", "yep", "yea", "yeah")
 
 # todo: whole lotta settings (for a whole loota things)
 def change_settings():
@@ -335,10 +382,6 @@ def change_settings():
     json.dump(pack_dicts(settings, setting_data), open("settings.json", "w"), indent=4)
 
 
-def server_module_select():
-    pass
-
-
 def local_file_select():
     # get file
     try:
@@ -354,8 +397,8 @@ def local_file_select():
     
     # check if it is already in the modules directory
     if filename in os.listdir("modules"):
-        choice = prompt.Prompt.ask(f"{filename} is already in the modules directory. Do you want to replace it? [yes/no]: ")
-        if choice.lower() == "no" or not choice:
+        choice = get_bool(f"{filename} is already in the modules directory. Do you want to replace it? [yes/no]: ")
+        if not choice:
             return
     
     # check for solver function
@@ -372,7 +415,7 @@ def local_file_select():
 def delete_module():
     module = module_select()
     if settings["confirm_delete"]:
-        if not prompt.Prompt.ask(f"Are you sure you want to delete {module.name} ({module.filename})?"):
+        if not get_bool(f"Are you sure you want to delete {module.name} ({module.filename})?"):
             return
     os.remove(f"modules/{module.filename}")
 
@@ -405,8 +448,8 @@ def create_module():
 ## SERVER STUFF ##
 session = None
 online = False
-scraper = cloudscraper.create_scraper()
 last_ping = 0
+server = ""
 
 headers = {
     "Content-Type": "application/json"
@@ -443,7 +486,7 @@ def get_server_pw():
         pw = input("Enter password for server: ")
     return pw
 
-def format_payload(payload: str):
+def format_payload(payload: str, modules=[]):
     global session
     if payload not in payloads:
         return
@@ -459,65 +502,93 @@ def format_payload(payload: str):
             ready_payload["session"] = session
         case "install":
             ready_payload["session"] = session
-            ready_payload["mod"] = [m.rstrip().lstrip() for m in input("> Enter the module to install (or multiple separated by commas)").split(",")] 
-        case "gitfetch":
-            ready_payload["session"] = session
+            ready_payload["mod"] = [m.name for m in modules]
         case "version":
             ready_payload["session"] = session
-            ready_payload["mod"] = [m.rstrip().lstrip() for m in input("> Enter the module to install (or multiple separated by commas)").split(",")] 
+            ready_payload["mod"] = [m.name for m in modules]
         case "metadata":
             ready_payload["session"] = session
-            ready_payload["mod"] = [m.rstrip().lstrip() for m in input("> Enter the module to install (or multiple separated by commas)").split(",")] 
+            ready_payload["mod"] = [m.name for m in modules]
         case "upload":
             ready_payload["session"] = session
             ready_payload["overrideVersion"] = get_bool("> Override the existing module's version number? [y/n]: ")
             ready_payload["overrideMod"] = get_bool("> Override the module if it exists on the server? [y/n]: ")
             selected_module = module_select().filename 
-            with open(f"modules/{selected_module}", "r") as f:
-                ready_payload["data"] = f.read()
+            ready_payload["data"] = open(f"modules/{selected_module}", "r").read()
             ready_payload["filename"] = selected_module
         case _:
             pass
 
-    # print("sending payload:", ready_payload)
+    if settings["show_requests"]:
+        print(f"[{yellow}PAYLOAD{reset}] {ready_payload}")
+
     return ready_payload
 
+
+def show_response(req):
+    if settings["show_requests"]:
+        colour = red if json.loads(req.text)["success"] == 0 else green
+        print(f"[{colour}RESPONSE{reset}] {req.text}")
+
+
+def send_request(payload):
+    req = requests.post(server, json=payload, headers=headers)
+    show_response(req)
+    if json.loads(req.text)["data"] == "easter egg":
+        print(r"easter egg triggered lmao goodbye (this is a 0.1% chance)")
+        quit()
+    return req
+
+
 # returns true if server is online
-def test_ping():
+def test_ping(mode="ready"):
     global last_ping
     try:
-        req = scraper.post(f"https://{settings['module_server']}/", json=format_payload("ping"), headers=headers)
-        last_ping = time.time()
-        # display appropriate message according ot stateus code
-        match req.status_code:
-            case 200:
-                print(f"Server {settings['module_server']} is online")
-                return True
-            case 523:
-                print(f"Server {settings['module_server']} is offline / unreachable")
-                return False
-            case 400:
-                print(f"Bad request: {req.status_code}") 
-            case _:
-                print(f"Unknown error: {req.status_code} (server told you to kys)")
+        if mode == "exists":
+            ping = ping3.ping(settings["module_server"])
+            match ping:
+                case False:
+                    print("Server does not exist. Unable to connect")
+                case None:
+                    print("server did not respond to ping. Unable to connect")
+                case _:
+                    print(f"Server exists")
+        else:
+            req = send_request(format_payload("ping"))
+            show_response(req)
+            last_ping = time.time()
+            # display appropriate message according ot stateus code
+            match req.status_code:
+                case 200:
+                    print(f"Server {settings['module_server']} is online (latency: {req.elapsed.seconds * 500 + req.elapsed.microseconds / 2000 :.2f}ms)")
+                    return True
+                case 523:
+                    print(f"Server {settings['module_server']} is offline")
+                case 504:
+                    print("Gateway Timeout (504). Server is offline") 
+                case 500:
+                    print("Server is updating (500). Server is offline")
+                case _:
+                    print(f"Unknown error: {req.status_code} (server told you to kys)")
     except Exception as e:
         print(f"{e}")
+    return False
 
 
 def get_session():
     payload = format_payload("session")
-    req = scraper.post(f"https://{settings['module_server']}",json=payload, headers=headers)
+    req = send_request(payload)
+    show_response(req)
 
     # parse response
     success = json.loads(req.text)["success"]
 
     if success == 0:
-        print("Invalid password; unable to generate session")
+        print(f"Invalid password; unable to generate session. If the {yellow}server_pw{reset} value is set, it might be set to the wrong password. ")
         return
     session = json.loads(req.text)["data"]
 
     return session
-
 
 
 def reconnect():
@@ -527,31 +598,32 @@ def reconnect():
         print("Server is offline. Attempting to reconnect...")
         online = test_ping()
         if online:
-            return "yes"
-    return "no"
+            return True
+    return False
 
 
 def server_required(func):
     def wrapper(*args, **kwargs):
         global session
         # check if server is online
-        if not online:
-            if reconnect() == "no":
-                return
+        if not online and not reconnect():
+            return
 
         # assumes server is online
         if not session:
             session = get_session()
-        func(*args, **kwargs)
+            if not session:
+                return
+        return func(*args, **kwargs)
     return wrapper
 
 
 @server_required
-def list_modules():
+def list_server_modules():
     global session
     # send payload
     payload = format_payload("list")
-    req = scraper.post(f"https://{settings['module_server']}/", json=payload, headers=headers)
+    req = send_request(payload)
 
     response = json.loads(req.text)
     # print("list_modules response:", response)
@@ -576,9 +648,34 @@ def list_modules():
         new_mod.id = str(len(modules))
         modules.append(new_mod)
 
-    server_module_table = new_table(f"Modules on {settings['module_server']}", titles=titles, rows=get_module_data(modules))
+    server_module_table = new_table(f"Modules on {settings['module_server']}", titles=titles, rows=get_module_data(copy.deepcopy(modules)))
     console.print(server_module_table)
 
+    return modules
+
+
+@server_required
+def server_module_select():
+    available_modules = list_server_modules()
+    selected_modules = get_valid_input(f"> Select module(s) by {cyan}ID{reset} or {green}name{reset} (separated by commas if there are multiple): ", available_modules, True, "module", many=True)
+    if selected_modules == "\0":
+        return
+
+    payload = format_payload("install", modules=selected_modules)
+    req = send_request(payload)
+    for mod in json.loads(req)["data"]:
+        mod_meta = get_metadata(mod)
+        if mod_meta == "IGNORE":  # there shouldn't e any ignores on the server
+            continue
+        with open(f"modules/{mod.filename}", "r") as m:
+            m.write(mod)
+
+
+@server_required
+def upload_module():
+    payload = format_payload("upload")
+    req = send_request(payload)
+    
 
 def action_controller(action: str):
     match action:
@@ -594,7 +691,6 @@ def action_controller(action: str):
             local_file_select()
         case "Import module from server":
             server_module_select()
-            print("not implemented yet")  # todo: prompt user with input dialog: get valid input (valid_inputs = modules.txt on server) -> download module from server -> add to /modules
         case "Export a module to server":
             print("not implemented yet")
         case "Update a module":
@@ -606,7 +702,7 @@ def action_controller(action: str):
         case "Remove a module":
             delete_module()
         case "Print all modules on server":
-            list_modules()
+            list_server_modules()
         case "Change settings":  # TODO: implement filtering by tags
             change_settings()
         case "Print user guide":
@@ -617,9 +713,13 @@ def action_controller(action: str):
 
 
 def main():
-    global online
-    os.system("cls" if os.name == "nt" else "clear") 
+    global online, server
+    os.system("cls" if os.name == "nt" else "clear")
+    
     update_settings()
+    server = f"https://{settings['module_server']}/"
+    print('Testing server connectity... ') 
+    test_ping(mode="exists")
     online = test_ping()
 
     while True:
