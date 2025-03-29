@@ -1,4 +1,4 @@
-import os, importlib.util, json, easygui, shutil, copy, time, requests
+import os, importlib.util, json, easygui, shutil, copy, time, cloudscraper
 from rich import console, table, prompt
 
 # nicer way of storing modules
@@ -32,7 +32,7 @@ def get_module_data(modules: list[Module]):
     ids = []
     names = []
     descriptions = []
-    tags = []
+    tags = [] 
     versions = []
     for m in modules:  # i do not need to document this shit you can tell what it does just read the code
         ids.append(str(m.id))
@@ -116,7 +116,7 @@ def pack_dicts(*args):
         return args[0]
     keys = keys[0]
     values = [list(arg.values()) for arg in args]
-    vals = list(map(list, zip(*values)))
+    vals = list(map(list, zip(*values[::-1])))
     return {k: v for k, v in zip(keys, vals)}
 
 
@@ -305,6 +305,9 @@ def load_module(module: Module):
         print(f"{module.name} does not have a solver() function. Unable to run module.")
 
 
+def boolstr(s: str):
+    return s.lower() in ("true", "yes", "ye", "0", "yep", "yea", "yeah")
+
 # todo: whole lotta settings (for a whole loota things)
 def change_settings():
     settings_table = table.Table(title="Settings")
@@ -324,7 +327,11 @@ def change_settings():
     choice = get_valid_input(f"> Select the setting you want to change by its {cyan}ID{reset} or {green}name{reset}: ", list(settings.keys()), True, err_word="setting")
     if choice == "\0":
         return
-    settings[choice] = input(f"Enter the new value for {choice}: ")
+    inp = input(f"Enter the new value for {choice}: ")
+    match setting_data[choice]:
+        case "boolean":
+            inp = boolstr(inp)
+    settings[choice] = inp
     json.dump(pack_dicts(settings, setting_data), open("settings.json", "w"), indent=4)
 
 
@@ -398,9 +405,8 @@ def create_module():
 ## SERVER STUFF ##
 session = None
 online = False
+scraper = cloudscraper.create_scraper()
 last_ping = 0
-
-
 
 headers = {
     "Content-Type": "application/json"
@@ -473,31 +479,34 @@ def format_payload(payload: str):
         case _:
             pass
 
-    print("sending payload:", ready_payload)
+    # print("sending payload:", ready_payload)
     return ready_payload
 
 # returns true if server is online
 def test_ping():
     global last_ping
-    req = requests.post(f"https://{settings['module_server']}", json=format_payload("ping"), headers=headers)
-    last_ping = time.time()
+    try:
+        req = scraper.post(f"https://{settings['module_server']}/", json=format_payload("ping"), headers=headers)
+        last_ping = time.time()
+        # display appropriate message according ot stateus code
+        match req.status_code:
+            case 200:
+                print(f"Server {settings['module_server']} is online")
+                return True
+            case 523:
+                print(f"Server {settings['module_server']} is offline / unreachable")
+                return False
+            case 400:
+                print(f"Bad request: {req.status_code}") 
+            case _:
+                print(f"Unknown error: {req.status_code} (server told you to kys)")
+    except Exception as e:
+        print(f"{e}")
 
-    # display appropriate message according ot stateus code
-    match req.status_code:
-        case 200:
-            print(f"Server {settings['module_server']} is online ({req.status_code})")
-            return True
-        case 523:
-            print(f"Server {settings['module_server']} is offline / unreachable")
-            return False
-        case 400:
-            print(f"Bad requests: {req.status_code}") 
-        case _:
-            print(f"Unknown error: {req.status_code} (server told you to kys)")
 
 def get_session():
     payload = format_payload("session")
-    req = requests.post(f"https://{settings['module_server']}",json=payload, headers=headers)
+    req = scraper.post(f"https://{settings['module_server']}",json=payload, headers=headers)
 
     # parse response
     success = json.loads(req.text)["success"]
@@ -539,16 +548,36 @@ def server_required(func):
 
 @server_required
 def list_modules():
+    global session
     # send payload
     payload = format_payload("list")
-    req = requests.post(f"https://{settings['module_server']}/", json=payload, headers=headers)
+    req = scraper.post(f"https://{settings['module_server']}/", json=payload, headers=headers)
 
     response = json.loads(req.text)
-    print("list_modules response:", response)
+    # print("list_modules response:", response)
     if response["success"] == 0:
+        if response['data'] == 'bad session':
+            session = None
         print(f"Could not list modules.")
-    else:
-        print(f"{response['data']}")  # todo: format modulse into table
+        return
+
+    if len(response['data']) == 0:
+        print("No modules in here")
+        return
+    
+    modules = []
+    for name, meta in response["data"].items():
+        new_mod = copy.deepcopy(default_module)
+        new_mod.name = name
+        new_mod.description = meta["desc"]
+        new_mod.version = meta["version"]
+        new_mod.filename = meta["filename"]
+        new_mod.tags = meta["tags"]
+        new_mod.id = str(len(modules))
+        modules.append(new_mod)
+
+    server_module_table = new_table(f"Modules on {settings['module_server']}", titles=titles, rows=get_module_data(modules))
+    console.print(server_module_table)
 
 
 def action_controller(action: str):
