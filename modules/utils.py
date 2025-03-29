@@ -11,8 +11,7 @@ def parse_num(num: str):
         except ValueError:
             return num
 
-# arbitrary precision arithmetic faction class
-# todo: roots and imaginary numbers
+# arbitrary precision arithmetic fraction class
 class Number:
     def __init__(self, num: str | int | float):
         numer = 1

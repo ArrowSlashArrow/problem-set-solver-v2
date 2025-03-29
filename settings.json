@@ -22,5 +22,13 @@
     "ignore_filter": [
         "boolean",
         true
+    ],
+    "show_requests": [
+        "boolean",
+        false
+    ],
+    "shorthand_actions": [
+        "boolean",
+        false
     ]
 }
