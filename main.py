@@ -54,6 +54,7 @@ cyan = "\x1b[38;5;6m"
 green = "\x1b[38;5;2m"
 yellow = "\x1b[38;5;3m"
 red = "\x1b[38;5;9m"
+saturated_red = "\x1b[38;5;196m"
 grey = "\x1b[38;5;8m"
 
 # bone-chillingly beautiful formatting
@@ -82,7 +83,7 @@ If you want to create your own module, follow the instructions below:
  - optionally a version
 3. put it in the /modules folder or import it through the program 
 
-{reset}{italic}{grey}Made by </> (arrow) on 2025/03/19, last updated on v0.3.2 at 2025/03/29{reset}
+{reset}{italic}{grey}Made by </> (arrow) and bitfeller on 2025/03/19, last updated on v1.0.0 at 2025/03/29{reset}
 """  # add stuff later when added
 
 """
@@ -153,6 +154,7 @@ def pack_dicts(*args):
     vals = list(map(list, zip(*values[::-1])))
     return {k: v for k, v in zip(keys, vals)}
 
+
 # update the various settings arrays
 def update_settings():
     global settings, setting_data
@@ -190,7 +192,7 @@ def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=F
     if not many:
         choice = ""
         while True:
-            inp = input(input_message).rstrip().lstrip()
+            inp = input(input_message).lower().rstrip().lstrip()
             if inp == "back" and back_enabled:
                 choice = "\0"
                 break
@@ -205,7 +207,6 @@ def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=F
             else:
                 choice = inp
                 break
-        print(choice)
         return choice
     else:
         choices = []
@@ -217,17 +218,15 @@ def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=F
 
             if indices and type(parse_num(i)) == int:
                 choices.append(valid_inputs[int(i)])
-                break
             else:
                 choices.append(i)
-                break
         return choices
 
 
-def get_metadata(file: str, raw_data=False):
+def get_metadata(file: str):
     current_module = copy.deepcopy(default_module)
     ignore = False
-    raw_data = open(file, "r").read() if raw_data else file
+    raw_data = open(file, "r").read()
 
     lines = raw_data.split("\n")
     for line in lines:
@@ -284,17 +283,19 @@ def update_module_table():
 
 
 # returns module filename
-def module_select():
+def module_select(other_valid_inputs=[]):
    
     # update table at execution time to account for imported modules
     update_module_table()
     console.print(module_table)
 
     module_names = [m.name for m in modules]
-    
+    module_names.extend(other_valid_inputs)
     choice = get_valid_input(f"> Select a module by {cyan}ID{reset} or {green}name{reset}: ", module_names, True, "module")
     if choice == "\0":  
         return
+    if choice in other_valid_inputs:
+        return choice
     # map choice index to module
     choice_index = module_names.index(choice)
     return modules[choice_index]
@@ -319,7 +320,7 @@ def action_select():
     console.print(action_table)
     available_actions = copy.copy(lower_actions)
     available_actions.extend(shorthand)
-    choice = get_valid_input(f"> Select an action by its {green}ID{reset} or {yellow}name{reset}{f' or {red}shorthand{reset}'}: ", available_actions, indices=True)
+    choice = get_valid_input(f"> Select an action by its {green}ID{reset} or {yellow}name{reset}{f' or {red}shorthand{reset}' if settings['shorthand_actions'] else ''}: ", available_actions, indices=True, err_word="action")
     
     if choice in shorthand:
         choice = full_actions[shorthand.index(choice)]
@@ -349,7 +350,7 @@ def load_module(module: Module):
         except Exception as e:
             print(f"{red}{module.name} crashed :({reset}")
     else:
-        print(f"{module.name} does not have a solver() function. Unable to run module.")
+        print(f"\n{module.name} does not have a solver() function. Unable to run module.\n")
 
 
 def boolstr(s: str):
@@ -386,12 +387,14 @@ def local_file_select():
     # get file
     try:
         selected_file = easygui.fileopenbox()
+        if not selected_file:
+            return
         filename = selected_file.split("/")[-1]
     except Exception as e:
         print("Unable to open file dialog")
     
     # filter out bad input
-    if ~filename.endswith(".py"):
+    if not filename.endswith(".py"):
         print("Invalid input file. Please select a .py file.")
         return
     
@@ -413,7 +416,21 @@ def local_file_select():
 
 
 def delete_module():
-    module = module_select()
+    all = ["all", "everything"]
+    module = module_select(other_valid_inputs=all)
+    if not module:
+        return
+    
+    if module in all:
+        if not get_bool(f"[{saturated_red}WARNING{reset}] {red}This action is irreversible. Are you absolutely sure you want to delete every single module you have installed?{reset} [yes/no]: "):
+            return
+        
+        try:
+            for file in os.listdir("modules"):
+                os.remove(f"modules/{file}")
+        except Exception as e:
+            pass
+    
     if settings["confirm_delete"]:
         if not get_bool(f"Are you sure you want to delete {module.name} ({module.filename})?"):
             return
@@ -422,6 +439,8 @@ def delete_module():
 
 def create_module():
     filename = input("> Enter the filename of the new module: ")
+    if filename == "back":
+        return
     if filename.endswith(".py"):
         filename = filename[:-3]  # remove .py
     content = copy.copy(boilerplate)
@@ -486,6 +505,7 @@ def get_server_pw():
         pw = input("Enter password for server: ")
     return pw
 
+
 def format_payload(payload: str, modules=[]):
     global session
     if payload not in payloads:
@@ -511,11 +531,14 @@ def format_payload(payload: str, modules=[]):
             ready_payload["mod"] = [m.name for m in modules]
         case "upload":
             ready_payload["session"] = session
-            ready_payload["overrideVersion"] = get_bool("> Override the existing module's version number? [y/n]: ")
-            ready_payload["overrideMod"] = get_bool("> Override the module if it exists on the server? [y/n]: ")
-            selected_module = module_select().filename 
+            m = module_select()
+            if not m:
+                return "\0"
+            selected_module = m.filename 
             ready_payload["data"] = open(f"modules/{selected_module}", "r").read()
             ready_payload["filename"] = selected_module
+            ready_payload["overrideVersion"] = get_bool("> Override the server module's version number? [y/n]: ")
+            ready_payload["overrideMod"] = get_bool("> Override the module if it exists on the server? [y/n]: ")
         case _:
             pass
 
@@ -555,12 +578,12 @@ def test_ping(mode="ready"):
                     print(f"Server exists")
         else:
             req = send_request(format_payload("ping"))
-            show_response(req)
             last_ping = time.time()
             # display appropriate message according ot stateus code
             match req.status_code:
                 case 200:
                     print(f"Server {settings['module_server']} is online (latency: {req.elapsed.seconds * 500 + req.elapsed.microseconds / 2000 :.2f}ms)")
+                    print(f"Message from server: {json.loads(req.text)['data']}")
                     return True
                 case 523:
                     print(f"Server {settings['module_server']} is offline")
@@ -578,15 +601,16 @@ def test_ping(mode="ready"):
 def get_session():
     payload = format_payload("session")
     req = send_request(payload)
-    show_response(req)
 
     # parse response
     success = json.loads(req.text)["success"]
+    data = json.loads(req.text)["data"]
 
     if success == 0:
-        print(f"Invalid password; unable to generate session. If the {yellow}server_pw{reset} value is set, it might be set to the wrong password. ")
+        if data == "bad pwd":
+            print(f"Invalid password; unable to generate session. If the {yellow}server_pw{reset} value is set, it might be set to the wrong password. ")
         return
-    session = json.loads(req.text)["data"]
+    session = data
 
     return session
 
@@ -629,7 +653,7 @@ def list_server_modules():
     # print("list_modules response:", response)
     if response["success"] == 0:
         if response['data'] == 'bad session':
-            session = None
+            session = get_session()
         print(f"Could not list modules.")
         return
 
@@ -663,24 +687,72 @@ def server_module_select():
 
     payload = format_payload("install", modules=selected_modules)
     req = send_request(payload)
-    for mod in json.loads(req)["data"]:
-        mod_meta = get_metadata(mod)
-        if mod_meta == "IGNORE":  # there shouldn't e any ignores on the server
-            continue
-        with open(f"modules/{mod.filename}", "r") as m:
-            m.write(mod)
+    resp = json.loads(req.text)["data"]
+    for mod in resp:  # mod: [metadata dict, contents]
+        filename = ""
+        name = ""
+        try:
+            filename = mod[0]["filename"]
+            name = mod[0]["name"]
+        except Exception as e:
+            pass
+
+        if filename in os.listdir("modules"):
+            choice = get_bool(f"{green}{name}{reset} ({yellow}{filename}{reset}) is already in the modules directory. Do you want to replace it? [yes/no]: ")
+            if not choice:
+                continue
+    
+        with open(f"modules/{filename}", "w") as m:
+            m.write(mod[1])
 
 
 @server_required
 def upload_module():
     payload = format_payload("upload")
+    if payload == "\0":
+        return
     req = send_request(payload)
-    
+    if json.loads(req.text)["success"]:
+        print("Module uploaded successfully.")
+    else:
+        print("Module upload failed")
+
+@server_required
+def update_module(module=""):
+    if module == "":
+        module = module_select()
+        if not module: 
+            return
+        
+    req = send_request(format_payload("version", [module]))
+    if json.loads(req.text)["success"] == 1:
+        version = int(json.loads(req.text)["data"][0])
+        module_version = int(module.version) if type(parse_num(module.version)) == int else -1
+
+        if module_version < version:
+            payload = format_payload("install", modules=[module])
+            req = send_request(payload)
+            mod = json.loads(req.text)["data"][0]
+            
+            with open(f"modules/{module.filename}", "w") as m:
+                m.write(mod[1])    
+            print(f"Updated {green}{module.name}{reset} ({yellow}{module.filename}{reset})")
+        else:
+            print(f"{green}{module.name}{reset} ({yellow}{module.filename}{reset}) is already up to date.")
+    else:
+        print(f"Unable to update {green}{module.name}{reset} ({yellow}{module.filename}{reset})")
+
+def update_all():
+    refresh_modules()
+    for m in modules:
+        update_module(m)
 
 def action_controller(action: str):
     match action:
         case "Select a module":
             module = module_select()
+            if not module:
+                return
             print(f"\n-----------[ {green}Start of {module.name} {reset}]-----------")
             load_module(module)
             print(f"------------[ {red}End of {module.name} {reset}]------------\n")
@@ -691,12 +763,12 @@ def action_controller(action: str):
             local_file_select()
         case "Import module from server":
             server_module_select()
-        case "Export a module to server":
-            print("not implemented yet")
+        case "Export module to server":
+            upload_module()
         case "Update a module":
-            print("not implemented yet")
+            update_module()
         case "Update all modules":
-            print("not implemented yet")
+            update_all()
         case "Create a new module":
             create_module()
         case "Remove a module":
@@ -715,10 +787,13 @@ def action_controller(action: str):
 def main():
     global online, server
     os.system("cls" if os.name == "nt" else "clear")
+
+    if not os.path.exists("modules"):
+        os.mkdir("modules")
     
     update_settings()
     server = f"https://{settings['module_server']}/"
-    print('Testing server connectity... ') 
+    print('Testing server connectivity... ') 
     test_ping(mode="exists")
     online = test_ping()
 
