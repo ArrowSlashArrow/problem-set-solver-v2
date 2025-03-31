@@ -1,6 +1,18 @@
 import os, importlib.util, json, easygui, shutil, copy, time, requests, ping3
 from rich import console, table
 
+# ansi colours
+reset = "\x1b[0m"
+italic = "\x1b[3m"
+bold = "\x1b[1m"
+cyan = "\x1b[38;5;6m"
+green = "\x1b[38;5;2m"
+yellow = "\x1b[38;5;3m"
+red = "\x1b[38;5;9m"
+saturated_red = "\x1b[38;5;196m"
+grey = "\x1b[38;5;8m"
+
+
 # nicer way of storing modules
 # also python law dictates that every main.py must have at least one struct
 class Module:
@@ -11,6 +23,7 @@ class Module:
         self.id = id
         self.filename = filename
         self.version = version
+        self.text = f"{green}{self.name}{reset} ({yellow}{self.filename}{reset})"
 
     def __str__(self):
         md_dict = {}
@@ -46,16 +59,6 @@ def get_module_data(modules: list[Module]):
 console = console.Console()
 modules = []
 
-# ansi colours
-reset = "\x1b[0m"
-italic = "\x1b[3m"
-bold = "\x1b[1m"
-cyan = "\x1b[38;5;6m"
-green = "\x1b[38;5;2m"
-yellow = "\x1b[38;5;3m"
-red = "\x1b[38;5;9m"
-saturated_red = "\x1b[38;5;196m"
-grey = "\x1b[38;5;8m"
 
 # bone-chillingly beautiful formatting
 tutorial_str = f"""  
@@ -113,8 +116,9 @@ actions = {  # shorthand
     "Import module from server": "simport",
     "Export module to server": "ex",
     "Print all modules on server": "sls",
-    "Change settings": "cfg",
+    "Change settings": "set",
     "Print user guide": "guide",
+    "Send feedback": "sfb",
     "Exit": "x"
 }
 
@@ -276,9 +280,15 @@ def refresh_modules():
 
 
 def update_module_table():
-    global titles, modules, module_table, module_table_data
+    global module_table, module_table_data
     refresh_modules()
-    module_table_data = get_module_data(modules)
+    filters = set([tag.lstrip().rstrip() for tag in settings["filter_tags"].split(",")])
+    filtered_modules = []
+    for module in modules:
+        # if module tags are a 
+        if filters <= set(module.tags):
+            filtered_modules.append(module)
+    module_table_data = get_module_data(filtered_modules)
     module_table = new_table("Installed Modules", titles, module_table_data)
 
 
@@ -287,6 +297,7 @@ def module_select(other_valid_inputs=[]):
    
     # update table at execution time to account for imported modules
     update_module_table()
+    print(f"Searching by these tags: {', '.join(settings['filter_tags'])}")
     console.print(module_table)
 
     module_names = [m.name for m in modules]
@@ -506,7 +517,7 @@ def get_server_pw():
     return pw
 
 
-def format_payload(payload: str, modules=[]):
+def format_payload(payload: str, modules=[], feedback=""):
     global session
     if payload not in payloads:
         return
@@ -539,6 +550,9 @@ def format_payload(payload: str, modules=[]):
             ready_payload["filename"] = selected_module
             ready_payload["overrideVersion"] = get_bool("> Override the server module's version number? [y/n]: ")
             ready_payload["overrideMod"] = get_bool("> Override the module if it exists on the server? [y/n]: ")
+        case "feedback":
+            ready_payload["session"] = session
+            ready_payload["feedback"] = feedback
         case _:
             pass
 
@@ -593,8 +607,10 @@ def test_ping(mode="ready"):
                     print("Server is updating (500). Server is offline")
                 case _:
                     print(f"Unknown error: {req.status_code} (server told you to kys)")
+    except json.decoder.JSONDecodeError:
+        print("Server responded with bad JSON, and is likely down.")
     except Exception as e:
-        print(f"{e}")
+        print("Could not connect to the server for this reason:", e)    
     return False
 
 
@@ -650,7 +666,6 @@ def list_server_modules():
     req = send_request(payload)
 
     response = json.loads(req.text)
-    # print("list_modules response:", response)
     if response["success"] == 0:
         if response['data'] == 'bad session':
             session = get_session()
@@ -736,16 +751,31 @@ def update_module(module=""):
             
             with open(f"modules/{module.filename}", "w") as m:
                 m.write(mod[1])    
-            print(f"Updated {green}{module.name}{reset} ({yellow}{module.filename}{reset})")
+            print(f"Updated {module.text}")
         else:
-            print(f"{green}{module.name}{reset} ({yellow}{module.filename}{reset}) is already up to date.")
+            print(f"{module.text} is already up to date.")
     else:
-        print(f"Unable to update {green}{module.name}{reset} ({yellow}{module.filename}{reset})")
+        print(f"Unable to update {module.text}")
 
 def update_all():
     refresh_modules()
     for m in modules:
         update_module(m)
+
+
+@server_required
+def send_feedback():
+    feedback = input("> What feedback would you like to share with us?\n> ")
+    try:
+        req = json.loads(send_request(format_payload("feedback", feedback=feedback)))
+        if req["success"] == 1:
+            print("Thanks for your feedback :)")
+            return
+    except Exception as e:
+        print(f"{red}error: {e}{reset}")
+    print("Unable to send feedback :(")
+
+
 
 def action_controller(action: str):
     match action:
@@ -779,8 +809,11 @@ def action_controller(action: str):
             change_settings()
         case "Print user guide":
             print(tutorial_str)
+        case "Send feedback":
+            send_feedback()
         case "Exit":
             print("Exiting...")
+            send_request(format_payload("exit"))
             exit(0)
 
 
