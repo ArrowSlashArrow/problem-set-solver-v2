@@ -1,5 +1,6 @@
 # utility file for modules
 # ignore_module
+import sympy, math
 
 # parse num util function
 def parse_num(num: str):

@@ -1,34 +1,47 @@
 {
     "filter_tags": [
         "list",
-        " "
+        " ",
+        "Tags by which modules are filtered"
     ],
     "module_server": [
         "domain",
-        "pmodmgr.bitfeller.uk"
+        "pmodmgr.bitfeller.uk",
+        "Server where modules are stored"
     ],
     "server_pw": [
         "string",
-        "yourmum567%^&*"
-    ],
-    "confirm_delete": [
-        "boolean",
-        true
+        "yourmum567%^&*",
+        "Password to the script running on the module server"
     ],
     "ignore_str": [
         "string",
-        "# ignore_module"
+        "# ignore_module",
+        "String which is searched for to mark a module as ignored"
+    ],
+    "confirm_delete": [
+        "boolean",
+        true,
+        "Toggles confirmation prompt before deleting a module"
     ],
     "ignore_filter": [
         "boolean",
-        true
+        true,
+        "Toggles visibility of ignored modules"
     ],
     "show_requests": [
         "boolean",
-        false
+        true,
+        "Show traffic sent and recieved from the module server"
     ],
     "shorthand_actions": [
         "boolean",
-        false
+        false,
+        "Enables shorthand for actions (e.g. 'ls' = 'list modules')"
+    ],
+    "autoupdate_modules": [
+        "boolean",
+        true,
+        "Automatically updates all modules at the start of the program"
     ]
 }
