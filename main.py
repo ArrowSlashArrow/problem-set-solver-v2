@@ -192,8 +192,9 @@ def new_table(name: str, titles: dict, rows: list[list]):
     return module_table
 
 
-def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=False, back_enabled : bool=True, err_word: str="input", many=False):
-    valid_inputs.extend([str(i) for i in range(len(valid_inputs))] if indices else [])
+def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=False, back_enabled : bool=True, err_word: str="input", many=False, everything=False):
+    original_inputs = copy.deepcopy(valid_inputs)
+    valid_inputs.extend([str(i) for i in range(len(valid_inputs))] if indices else [])    
     if not many:
         choice = ""
         while True:
@@ -216,6 +217,8 @@ def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=F
     else:
         choices = []
         inp = [i.lstrip().rstrip() for i in input(input_message).split(",")]
+        if inp[0].lower() in ["all", "everything"] and everything:
+            return original_inputs
         for i in inp:
             # skip over the input if it is invalid
             if i not in valid_inputs:
@@ -276,7 +279,8 @@ def refresh_modules():
        
         modules.append(current_module)
     
-    print(f"Loaded {len(modules)} modules successfully")
+    if len(modules) > 0:
+        print(f"Loaded {len(modules)} modules successfully")
 
 
 def update_module_table():
@@ -284,7 +288,7 @@ def update_module_table():
     refresh_modules()
     if len(modules) == 0:
         print("No modules found in modules/")
-        return
+
     filters = [tag.lstrip().rstrip() for tag in settings["filter_tags"].value.split(",")]
     # gets rid of empty strings
     for filter in filters:
@@ -696,10 +700,11 @@ def list_server_modules():
 @server_required
 def server_module_select():
     available_modules = list_server_modules()
-    selected_modules = get_valid_input(f"> Select module(s) by {cyan}ID{reset} or {green}name{reset} (separated by commas if there are multiple): ", available_modules, True, "module", many=True)
+    selected_modules = get_valid_input(f"> Select module(s) by {cyan}ID{reset} or {green}name{reset} (separated by commas if there are multiple): ", available_modules, True, "module", many=True, everything=True)
     if selected_modules == "\0":
         return
 
+    print(selected_modules)
     payload = format_payload("install", modules=selected_modules)
     req = send_request(payload)
     resp = json.loads(req.text)["data"]
@@ -755,7 +760,12 @@ def update_module(module=""):
         else:
             print(f"{module.get_str()} is already up to date.")
     else:
-        print(f"Unable to update {module.get_str()}")
+        match json.loads(req.text)["data"]:
+            case "no mod":
+                print(f"Unable to update {module.get_str()} because it is not on the server.")
+            case _:
+                print(f"Unable to update {module.get_str()}")
+
 
 def update_all():
     refresh_modules()
@@ -766,6 +776,8 @@ def update_all():
 @server_required
 def send_feedback():
     feedback = input("> What feedback would you like to share with us?\n> ")
+    if feedback == "\0":
+        return
     try:
         # loads request as dict
         req = json.loads(send_request(format_payload("feedback", feedback=feedback)).text)
@@ -805,7 +817,7 @@ def action_controller(action: str):
             create_module()
         case "Remove a module":
             delete_module()
-        case "Print all modules on server":
+        case "Display all modules on server":
             list_server_modules()
         case "Change settings":
             change_settings()
@@ -830,15 +842,21 @@ def preload():
     
     # load settings
     update_settings()
-    if settings["autoupdate_modules"].value:
-        update_all()
     
     # ping server and check connection
     server = f"https://{settings['module_server'].value}/"
     print('Testing server connectivity... ') 
     test_ping(mode="exists")
     online = test_ping()
-    
+
+    # autoupdate
+    if settings["autoupdate_modules"].value:
+        try:
+            updating = len([f for f in os.listdir("modules") if f != "utils.py" and f.endswith(".py")])
+            print(f"\nUpdating {updating} module{'s' if updating != 1 else ''}...")
+            update_all()
+        except Exception as e:
+            print(f"{red}Could not autoupdate modules.{reset}")
     print(tutorial_str)
 
 
