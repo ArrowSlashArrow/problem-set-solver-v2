@@ -13,7 +13,7 @@ To check if you already have python, you can open a shell (step 2) and type `pyt
 ## 2. Open a shell 
 Any shell will do for this step, so here are some of the most common ones:
  - On Windows, press the windows key (⊞) and type `cmd`, then press enter. A window named `Command Prompt` should open.
- - On Linux, press the 
+ - On Linux, **you know what to do.**
  - On Mac, click the Launchpad icon in the Dock, type Terminal in the search field, then click Terminal.
  - On ChromeOS, there is no builtin hell if it is a managed device, but you can use ones like the picoCTF webshell to do your bidding. To access the webshell, you need an account on https://picoctf.org/
 ## 3. Run `git clone https://github.com/ArrowSlashArrow/problem-set-solver-v2`

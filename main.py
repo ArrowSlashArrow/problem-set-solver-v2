@@ -1,5 +1,9 @@
-import os, importlib.util, json, easygui, shutil, copy, time, requests, ping3
-from rich import console, table
+try:
+    import os, importlib.util, json, easygui, shutil, copy, time, requests, ping3
+    from rich import console, table
+except ModuleNotFoundError:
+    print("[\x1b[38;5;9mFATAL\x1b[0m] \x1b[38;5;9mThe requied modules are not installed. Please install them by running the command 'pip install -r requirements.txt'\x1b[0m")
+    quit()
 
 # ansi colours
 reset = "\x1b[0m"
@@ -23,8 +27,8 @@ class Module:
         self.id = id
         self.filename = filename
         self.version = version
-        self.text = f"{green}{self.name}{reset} ({yellow}{self.filename}{reset})"
 
+    # pretty-print metadata dict
     def __str__(self):
         md_dict = {}
         md_dict["name"] = self.name
@@ -35,6 +39,18 @@ class Module:
         md_dict["version"] = self.version
 
         return json.dumps(md_dict, indent=4)
+    
+    # nicely-formatted string
+    def get_str(self):
+        return f"{green}{self.name}{reset} ({yellow}{self.filename}{reset})"
+    
+# settings struct for convenience
+class Setting:
+    def __init__(self, name, type, value, description):
+        self.type = type
+        self.value = value
+        self.name = name
+        self.description = description
 
 
 default_module = Module("file", "<Unknown>", "<No description>", [], "<Unknown>", None)
@@ -47,7 +63,7 @@ def get_module_data(modules: list[Module]):
     descriptions = []
     tags = [] 
     versions = []
-    for m in modules:  # i do not need to document this shit you can tell what it does just read the code
+    for m in modules:  # formats everything properly so rich can display it
         ids.append(str(m.id))
         names.append(m.name)
         descriptions.append(m.description)
@@ -59,53 +75,39 @@ def get_module_data(modules: list[Module]):
 console = console.Console()
 modules = []
 
+# user guide
+tutorial_str = f"""\n----------------------------------------------------------------------- 
+Welcome to the problem set solver tutorial!
 
-# bone-chillingly beautiful formatting
-tutorial_str = f"""  
-Welcome to the module system tutorial!
+{bold}## USAGE{reset}
 To select an action, type its {yellow}name{reset} or its corresponding {green}ID{reset}.
-If you want to go back to the action selection, type {cyan}back{reset}.
-If you can't see any modules, cehck your tags in the settings.
 
-List of current settings:
-{green}filter_tags{reset} (list): {yellow} A list of tags that modules are filtered by. Modules without these tags will not show up in the module selection. {reset}
-{green}module_server{reset} (IPv4 Address): {yellow} The server that stores modules. By default, it is XXX.XXX.XXX.XXX{reset}
-{green}confirm_delete{reset} (True / False): {yellow} Confirms with user before deleting a module. True by default {reset}
-{green}ignore_str{reset} (string): {yellow} A string that modules are filtered by. 
-Modules with this string in their code will not show up in the module selection. {reset}
-{green}ignore_filter{reset} (True / False): {yellow} Toggles the previous setting. True by default. {reset} 
+To get started, download a module from the server by typing 7.
+Once at the module selection screen, you can select modules by name or number. To install mutiple modules, type their corresponding numbers or names separated by spaces (e.g. 1, 2, 3)
+You can now run these modules by typing 0 at the action selection, and selecting the module you want to run. You can only select one module to run at a time.
+If a module crashes, an error will appear displaying the crash message.
 
+If you want to delete all modules, type 'all' or 'everything' at the module delte prompt.
+Similarly, if you want to download all modules on the server, type 'all' or 'everything' at its respective prompt.
 
-If you want to create your own module, follow the instructions below:
-1. Create a new python file (.py)
-2. put these comments in the file (comments begin with "{bold}# {reset}") that say:
- - the name of the module in this format: {bold}# name: [Name] {reset}
- - a description of the module in this format: {bold}# description: some module {reset}
- - tags for the module in this format: {bold}# tags: tag1, tag2, tag3 {reset}
-    * these tags must be separated by a comma and a space: ", "
- - optionally a version
-3. put it in the /modules folder or import it through the program 
+If you want to go back to the action selection from any prompt, type {cyan}back{reset}.
+If you want to send feedback or suggest a feature, select action 12 and enter the feedback.
 
-{reset}{italic}{grey}Made by </> (arrow) and bitfeller on 2025/03/19, last updated on v1.0.0 at 2025/03/29{reset}
-"""  # add stuff later when added
+{bold}## COMMON PROBLEMS{reset}
+If you can't see any modules, they might still be downloading from the server, or your tag search is filtering them out.
+To change the tag search, go to the settings changer by typing 10 and follow the instructions.
 
-"""
-All actions:
-- Select a module [DONE]
-- List all modules [DONE]
-- Update a module [SERVER]
-- Update all modules [SERVER]
-- Create a new module [DONE]
-- Remove a module [DONE] 
-- Import module from file [DONE]
-- Import module from server [DONE]
-- Export module to server [DONE]
-- print all available modules on server [DONE]
-- Change settings [DONE]
-- Print user guide [DONE]
-- Exit [DONE]
-"""
-actions = {  # shorthand
+{bold}## MODULES{reset}
+To create a module, you must know how to write basic code in python, and if you want to work with complex equations, learn how to use SymPy.
+Your modules should not contain any dependencies or import other than utils.
+If you don't know how to write code, you can contact me to make it at @arrowslasharrow on Discord.
+
+{reset}{italic}{grey}Made by </> (arrow) and bitfeller on 2025/03/19, last updated on v1.0.1 at 2025/03/31{reset}
+-----------------------------------------------------------------------
+"""  
+
+# shorthand
+actions = {
     "Select a module": "sel",
     "List all modules": "ls",
     "Update a module": "upd",
@@ -115,7 +117,7 @@ actions = {  # shorthand
     "Import module from file": "fimport",
     "Import module from server": "simport",
     "Export module to server": "ex",
-    "Print all modules on server": "sls",
+    "Display all modules on server": "sls",
     "Change settings": "set",
     "Print user guide": "guide",
     "Send feedback": "sfb",
@@ -145,7 +147,6 @@ titles = {  # constant
 
 # settings
 settings = {}
-setting_data = {}
 
 # wanted to refactor this but couldn't
 # if it works, don't touch it
@@ -163,8 +164,8 @@ def pack_dicts(*args):
 def update_settings():
     global settings, setting_data
     raw_settings = json.load(open("settings.json", "r"))
-    settings = {k: v[1] for k, v in raw_settings.items()}
-    setting_data = {k: v[0] for k, v in raw_settings.items()}
+    for key in list(raw_settings.keys()):
+        settings[key] = (Setting(key, *raw_settings[key][0:3]))
 
 
 # parse num util function
@@ -242,14 +243,13 @@ def get_metadata(file: str):
             current_module.tags = line.split("# tags: ")[1].split(", ")
         if "# version: " in line:
             current_module.version = int(line.split("# version: ")[1])
-        if settings["ignore_str"] in line.lower():
+        if settings["ignore_str"].value in line.lower():
             ignore = True
     return current_module if not ignore else "IGNORE"
 
 
 def refresh_modules():
     global modules
-    # TODO: update old modules (version number) when downloading
     module_files = [m for m in os.listdir("modules") if m.endswith(".py") and os.path.isfile(f"modules/{m}")]
 
     modules = []
@@ -282,11 +282,18 @@ def refresh_modules():
 def update_module_table():
     global module_table, module_table_data
     refresh_modules()
-    filters = set([tag.lstrip().rstrip() for tag in settings["filter_tags"].split(",")])
+    if len(modules) == 0:
+        print("No modules found in modules/")
+        return
+    filters = [tag.lstrip().rstrip() for tag in settings["filter_tags"].value.split(",")]
+    # gets rid of empty strings
+    for filter in filters:
+        if filter == "":
+            filters.remove(filter)
     filtered_modules = []
     for module in modules:
-        # if module tags are a 
-        if filters <= set(module.tags):
+        # if module tags are within the filter constraints, add the module to the table
+        if set(filters) <= set(module.tags):
             filtered_modules.append(module)
     module_table_data = get_module_data(filtered_modules)
     module_table = new_table("Installed Modules", titles, module_table_data)
@@ -297,9 +304,13 @@ def module_select(other_valid_inputs=[]):
    
     # update table at execution time to account for imported modules
     update_module_table()
-    print(f"Searching by these tags: {', '.join(settings['filter_tags'])}")
+    # info messages
+    if len(settings['filter_tags'].value) > 0:
+        print(f"Searching by these tags: {', '.join(settings['filter_tags'].value)}")
+    print("If no modules show up, type 'back' and try again in a few seconds,. or check your tags setting.")
     console.print(module_table)
 
+    # get module
     module_names = [m.name for m in modules]
     module_names.extend(other_valid_inputs)
     choice = get_valid_input(f"> Select a module by {cyan}ID{reset} or {green}name{reset}: ", module_names, True, "module")
@@ -323,7 +334,7 @@ def action_select():
         "Action": {"style": "yellow", "justify": "left"}
     }
     action_table_data = [ids, full_actions]
-    if settings["shorthand_actions"]:
+    if settings["shorthand_actions"].value:
         titles["Shorthand"] = {"style": "red", "justify": "left"}
         action_table_data.append(shorthand)
 
@@ -331,7 +342,7 @@ def action_select():
     console.print(action_table)
     available_actions = copy.copy(lower_actions)
     available_actions.extend(shorthand)
-    choice = get_valid_input(f"> Select an action by its {green}ID{reset} or {yellow}name{reset}{f' or {red}shorthand{reset}' if settings['shorthand_actions'] else ''}: ", available_actions, indices=True, err_word="action")
+    choice = get_valid_input(f"> Select an action by its {green}ID{reset} or {yellow}name{reset}{f' or {red}shorthand{reset}' if settings['shorthand_actions'].value else ''}: ", available_actions, indices=True, err_word="action")
     
     if choice in shorthand:
         choice = full_actions[shorthand.index(choice)]
@@ -367,31 +378,48 @@ def load_module(module: Module):
 def boolstr(s: str):
     return s.lower() in ("true", "yes", "ye", "1", "yep", "yea", "yeah")
 
-# todo: whole lotta settings (for a whole loota things)
+
+def format_settings(settings: list[Setting]):
+    raw_settings = {}
+    for setting in list(settings.values()):
+        raw_settings[setting.name] = [setting.type, setting.value, setting.description]
+    return raw_settings
+
+
 def change_settings():
+    # initialize table and columns
     settings_table = table.Table(title="Settings")
     settings_table.add_column("ID", justify="right", style="cyan")
     settings_table.add_column("Setting", justify="left", style="green")
     settings_table.add_column("Value", justify="left", style="yellow")
-    settings_table.add_column("Data Type", justify="left", style="red")
+    settings_table.add_column("Description", justify="left", style="red")
+    settings_table.add_column("Data Type", justify="left", style="purple")
     
-    for i in range(len(settings)):
-        setting = list(settings.keys())[i]
-        value = str(settings[setting])
-        data_type = str(setting_data[setting])
-
-        settings_table.add_row(str(i), setting, value, data_type)
+    # populate settings table
+    index = 0
+    for setting in list(settings.values()):
+        name = setting.name
+        value = str(setting.value)
+        data_type = setting.type
+        description = setting.description
+        settings_table.add_row(str(index), name, value, description, data_type)
+        index += 1
 
     console.print(settings_table)
     choice = get_valid_input(f"> Select the setting you want to change by its {cyan}ID{reset} or {green}name{reset}: ", list(settings.keys()), True, err_word="setting")
     if choice == "\0":
         return
+    
     inp = input(f"Enter the new value for {choice}: ")
-    match setting_data[choice]:
+    
+    # format input according to data type
+    match settings[choice].type:
         case "boolean":
             inp = boolstr(inp)
-    settings[choice] = inp
-    json.dump(pack_dicts(settings, setting_data), open("settings.json", "w"), indent=4)
+
+    # change and save setting
+    settings[choice].value = inp
+    json.dump(format_settings(settings), open("settings.json", "w"), indent=4)
 
 
 def local_file_select():
@@ -403,6 +431,7 @@ def local_file_select():
         filename = selected_file.split("/")[-1]
     except Exception as e:
         print("Unable to open file dialog")
+        return  # todo: file select through path
     
     # filter out bad input
     if not filename.endswith(".py"):
@@ -416,7 +445,7 @@ def local_file_select():
             return
     
     # check for solver function
-    if ~check_module(filename):
+    if not check_module(filename):
         print(f"{selected_file} does not have a solver() function. It cannot be ran as a module and will not be imported.")
     
     try:  # copy file to modules/ directory
@@ -437,15 +466,15 @@ def delete_module():
             return
         
         try:
-            for file in os.listdir("modules"):
+            for file in [f for f in os.listdir("modules") if f != "utils.py"]:
                 os.remove(f"modules/{file}")
         except Exception as e:
             pass
-    
-    if settings["confirm_delete"]:
-        if not get_bool(f"Are you sure you want to delete {module.name} ({module.filename})?"):
-            return
-    os.remove(f"modules/{module.filename}")
+    else:
+        if settings["confirm_delete"].value:
+            if not get_bool(f"Are you sure you want to delete {module.name} ({module.filename})? [yes/no] "):
+                return
+        os.remove(f"modules/{module.filename}")
 
 
 def create_module():
@@ -485,33 +514,12 @@ headers = {
     "Content-Type": "application/json"
 }
 
-# payloads:
-# "ping": {} -> pong
-# "session": {"pwd": password} -> session
-# "gitfetch": {"session": session} -> ?
-# "version": {"mod": [module names], "session": session} -> version number(s)
-# "install": {"mod": [module names], "session": session} -> module file(s)
-# "list": {include_ignores: bool, "session": session} -> list of all modules on server
-
-payloads = {
-    "ping": [],
-    "pong": [],  
-    "session": ["pwd"],
-    "gitfetch": ["session"],
-    "version": ["mod", "session"],
-    "metadata": ["mod", "session"],
-    "install": ["mod", "session"],
-    "upload": ["mod", "session"],
-    "list": ["include_ignores", "session"]
-}
-
-
 def get_bool(msg):
     return input(msg).lower()[0] == "y"
 
 
 def get_server_pw():
-    pw = settings["server_pw"]
+    pw = settings["server_pw"].value
     if len(pw) <= 0: 
         pw = input("Enter password for server: ")
     return pw
@@ -519,8 +527,6 @@ def get_server_pw():
 
 def format_payload(payload: str, modules=[], feedback=""):
     global session
-    if payload not in payloads:
-        return
     
     ready_payload = {
         "action": payload
@@ -529,15 +535,9 @@ def format_payload(payload: str, modules=[], feedback=""):
     match payload:
         case "session":
             ready_payload["pwd"] = get_server_pw()
-        case "list":
+        case "list" | "exit":
             ready_payload["session"] = session
-        case "install":
-            ready_payload["session"] = session
-            ready_payload["mod"] = [m.name for m in modules]
-        case "version":
-            ready_payload["session"] = session
-            ready_payload["mod"] = [m.name for m in modules]
-        case "metadata":
+        case "install" | "version" | "metadata":
             ready_payload["session"] = session
             ready_payload["mod"] = [m.name for m in modules]
         case "upload":
@@ -548,22 +548,22 @@ def format_payload(payload: str, modules=[], feedback=""):
             selected_module = m.filename 
             ready_payload["data"] = open(f"modules/{selected_module}", "r").read()
             ready_payload["filename"] = selected_module
-            ready_payload["overrideVersion"] = get_bool("> Override the server module's version number? [y/n]: ")
-            ready_payload["overrideMod"] = get_bool("> Override the module if it exists on the server? [y/n]: ")
+            ready_payload["overrideVersion"] = get_bool("> Override the server module's version number? [yes/no]: ")
+            ready_payload["overrideMod"] = get_bool("> Override the module if it exists on the server? [yes/no]: ")
         case "feedback":
             ready_payload["session"] = session
             ready_payload["feedback"] = feedback
         case _:
             pass
 
-    if settings["show_requests"]:
+    if settings["show_requests"].value:
         print(f"[{yellow}PAYLOAD{reset}] {ready_payload}")
 
     return ready_payload
 
 
 def show_response(req):
-    if settings["show_requests"]:
+    if settings["show_requests"].value:
         colour = red if json.loads(req.text)["success"] == 0 else green
         print(f"[{colour}RESPONSE{reset}] {req.text}")
 
@@ -582,7 +582,7 @@ def test_ping(mode="ready"):
     global last_ping
     try:
         if mode == "exists":
-            ping = ping3.ping(settings["module_server"])
+            ping = ping3.ping(settings["module_server"].value)
             match ping:
                 case False:
                     print("Server does not exist. Unable to connect")
@@ -596,11 +596,11 @@ def test_ping(mode="ready"):
             # display appropriate message according ot stateus code
             match req.status_code:
                 case 200:
-                    print(f"Server {settings['module_server']} is online (latency: {req.elapsed.seconds * 500 + req.elapsed.microseconds / 2000 :.2f}ms)")
+                    print(f"Server {settings['module_server'].value} is online (latency: {req.elapsed.seconds * 500 + req.elapsed.microseconds / 2000 :.2f}ms)")
                     print(f"Message from server: {json.loads(req.text)['data']}")
                     return True
                 case 523:
-                    print(f"Server {settings['module_server']} is offline")
+                    print(f"Server {settings['module_server'].value} is offline")
                 case 504:
                     print("Gateway Timeout (504). Server is offline") 
                 case 500:
@@ -687,7 +687,7 @@ def list_server_modules():
         new_mod.id = str(len(modules))
         modules.append(new_mod)
 
-    server_module_table = new_table(f"Modules on {settings['module_server']}", titles=titles, rows=get_module_data(copy.deepcopy(modules)))
+    server_module_table = new_table(f"Modules on {settings['module_server'].value}", titles=titles, rows=get_module_data(copy.deepcopy(modules)))
     console.print(server_module_table)
 
     return modules
@@ -751,11 +751,11 @@ def update_module(module=""):
             
             with open(f"modules/{module.filename}", "w") as m:
                 m.write(mod[1])    
-            print(f"Updated {module.text}")
+            print(f"Updated {module.get_str()}")
         else:
-            print(f"{module.text} is already up to date.")
+            print(f"{module.get_str()} is already up to date.")
     else:
-        print(f"Unable to update {module.text}")
+        print(f"Unable to update {module.get_str()}")
 
 def update_all():
     refresh_modules()
@@ -767,12 +767,14 @@ def update_all():
 def send_feedback():
     feedback = input("> What feedback would you like to share with us?\n> ")
     try:
-        req = json.loads(send_request(format_payload("feedback", feedback=feedback)))
+        # loads request as dict
+        req = json.loads(send_request(format_payload("feedback", feedback=feedback)).text)
         if req["success"] == 1:
             print("Thanks for your feedback :)")
             return
     except Exception as e:
         print(f"{red}error: {e}{reset}")
+    # print this if bad params or crash 
     print("Unable to send feedback :(")
 
 
@@ -805,7 +807,7 @@ def action_controller(action: str):
             delete_module()
         case "Print all modules on server":
             list_server_modules()
-        case "Change settings":  # TODO: implement filtering by tags
+        case "Change settings":
             change_settings()
         case "Print user guide":
             print(tutorial_str)
@@ -813,22 +815,35 @@ def action_controller(action: str):
             send_feedback()
         case "Exit":
             print("Exiting...")
-            send_request(format_payload("exit"))
+            send_request(format_payload("exit")) if session else 0
             exit(0)
 
 
-def main():
+def preload():
     global online, server
     os.system("cls" if os.name == "nt" else "clear")
 
+    # create /modules if it does not exist
     if not os.path.exists("modules"):
         os.mkdir("modules")
+        print(f"{red}The modules/ directory was not found and was replaced. The utils.py is now lost from it, please redownload it from the GitHub repository (ArrowSlashArrow/problem-set-solver-v2). {reset}")
     
+    # load settings
     update_settings()
-    server = f"https://{settings['module_server']}/"
+    if settings["autoupdate_modules"].value:
+        update_all()
+    
+    # ping server and check connection
+    server = f"https://{settings['module_server'].value}/"
     print('Testing server connectivity... ') 
     test_ping(mode="exists")
     online = test_ping()
+    
+    print(tutorial_str)
+
+
+def main():
+    preload()
 
     while True:
         action_controller(action_select())
