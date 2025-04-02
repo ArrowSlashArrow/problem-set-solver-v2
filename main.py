@@ -20,11 +20,10 @@ grey = "\x1b[38;5;8m"
 # nicer way of storing modules
 # also python law dictates that every main.py must have at least one struct
 class Module:
-    def __init__(self, filename: str, name: str, description: str, tags: list[str], version: int, id: int | None=-1):
+    def __init__(self, filename: str, name: str, description: str, tags: list[str], version: int):
         self.name = name
         self.description = description
         self.tags = tags
-        self.id = id
         self.filename = filename
         self.version = version
 
@@ -34,7 +33,6 @@ class Module:
         md_dict["name"] = self.name
         md_dict["description"] = self.description
         md_dict["tags"] = self.tags
-        md_dict["id"] = self.id
         md_dict["filename"] = self.filename
         md_dict["version"] = self.version
 
@@ -53,7 +51,7 @@ class Setting:
         self.description = description
 
 
-default_module = Module("file", "<Unknown>", "<No description>", [], "<Unknown>", None)
+default_module = Module("file", "<Unknown>", "<No description>", [], "<Unknown>")
 
 # unpack function for list[Module] -> good data for new_table() 
 # returns [[ids], [name], [descriptions], [tags as a string]]
@@ -64,7 +62,7 @@ def get_module_data(modules: list[Module]):
     tags = [] 
     versions = []
     for m in modules:  # formats everything properly so rich can display it
-        ids.append(str(m.id))
+        ids.append(str(len(ids)))
         names.append(m.name)
         descriptions.append(m.description)
         tags.append(", ".join(m.tags))
@@ -76,7 +74,7 @@ console = console.Console()
 modules = []
 
 # user guide
-tutorial_str = f"""\n----------------------------------------------------------------------- 
+tutorial_str = f"""\n-------------------------------[ {green}BEGIN TUTORIAL{reset} ]------------------------------- 
 Welcome to the problem set solver tutorial!
 
 {bold}## USAGE{reset}
@@ -102,8 +100,8 @@ To create a module, you must know how to write basic code in python, and if you 
 Your modules should not contain any dependencies or import other than utils.
 If you don't know how to write code, you can contact me to make it at @arrowslasharrow on Discord.
 
-{reset}{italic}{grey}Made by </> (arrow) and bitfeller on 2025/03/19, last updated on v1.0.1 at 2025/03/31{reset}
------------------------------------------------------------------------
+{reset}{italic}{grey}Made by </> (arrow) and bitfeller on 2025/03/19, last updated on v1.0.1 at 2025/04/01{reset}
+--------------------------------[ {red}END TUTORIAL{reset} ]--------------------------------
 """  
 
 # shorthand
@@ -130,7 +128,7 @@ boilerplate = """# name: <NAME>
 # tags: <TAGS>
 # version: 1
 # made by <USER> on <DATE>
-import utils
+import utils, math, sympy
 
 def solver():
     pass
@@ -169,7 +167,6 @@ def update_settings():
 
 
 # parse num util function
-# maybe put the inside of a utils.py?
 def parse_num(num: str):
     try:
         return int(num)
@@ -275,7 +272,6 @@ def refresh_modules():
 
         # get the rest of metadata
         current_module.filename = module_files[m]
-        current_module.id = m
        
         modules.append(current_module)
     
@@ -420,6 +416,15 @@ def change_settings():
     match settings[choice].type:
         case "boolean":
             inp = boolstr(inp)
+        case "positive number":
+            parsed = parse_num(inp)
+            if type(parsed) not in [float, int]:
+                print(f"Unable to set {choice} to {inp}, the new value should be a positive number")
+                return
+            if abs(parsed) != parsed and parsed != 0:
+                print(f"Unable to set {choice} to {inp}, the new value must be positive.")
+                return
+            inp = parsed 
 
     # change and save setting
     settings[choice].value = inp
@@ -529,16 +534,30 @@ def get_server_pw():
     return pw
 
 
+def server_required(func):
+    def wrapper(*args, **kwargs):
+        global session
+        # check if server is online
+        if not online and not reconnect():
+            return
+
+        # assumes server is online
+        if not session:
+            session = get_session()
+            if not session:
+                return
+        return func(*args, **kwargs)
+    return wrapper
+
+
+@server_required
 def format_payload(payload: str, modules=[], feedback=""):
     global session
-    
     ready_payload = {
         "action": payload
     }
 
     match payload:
-        case "session":
-            ready_payload["pwd"] = get_server_pw()
         case "list" | "exit":
             ready_payload["session"] = session
         case "install" | "version" | "metadata":
@@ -558,6 +577,7 @@ def format_payload(payload: str, modules=[], feedback=""):
             ready_payload["session"] = session
             ready_payload["feedback"] = feedback
         case _:
+            print(payload)
             pass
 
     if settings["show_requests"].value:
@@ -572,8 +592,10 @@ def show_response(req):
         print(f"[{colour}RESPONSE{reset}] {req.text}")
 
 
-def send_request(payload):
-    req = requests.post(server, json=payload, headers=headers)
+def send_request(payload, raw=True):
+    req = requests.post(server, json=payload, headers=headers, timeout=settings["request_waittime"].value)
+    if raw and settings["show_requests"].value:
+        print(f"[{yellow}PAYLOAD{reset}] {payload}")
     show_response(req)
     if json.loads(req.text)["data"] == "easter egg":
         print(r"easter egg triggered lmao goodbye (this is a 0.1% chance)")
@@ -595,7 +617,7 @@ def test_ping(mode="ready"):
                 case _:
                     print(f"Server exists")
         else:
-            req = send_request(format_payload("ping"))
+            req = send_request({"action": "ping"}, raw=True)
             last_ping = time.time()
             # display appropriate message according ot stateus code
             match req.status_code:
@@ -619,8 +641,7 @@ def test_ping(mode="ready"):
 
 
 def get_session():
-    payload = format_payload("session")
-    req = send_request(payload)
+    req = send_request({"action": "session", "pwd": get_server_pw()}, raw=True)
 
     # parse response
     success = json.loads(req.text)["success"]
@@ -636,7 +657,7 @@ def get_session():
 
 
 def reconnect():
-    if last_ping + 60 < time.time():
+    if last_ping + settings["reconnect_timeout"].value < time.time():
         print("Server is offline. Unable to perform action.")
     else:
         print("Server is offline. Attempting to reconnect...")
@@ -644,22 +665,6 @@ def reconnect():
         if online:
             return True
     return False
-
-
-def server_required(func):
-    def wrapper(*args, **kwargs):
-        global session
-        # check if server is online
-        if not online and not reconnect():
-            return
-
-        # assumes server is online
-        if not session:
-            session = get_session()
-            if not session:
-                return
-        return func(*args, **kwargs)
-    return wrapper
 
 
 @server_required
@@ -688,7 +693,6 @@ def list_server_modules():
         new_mod.version = meta["version"]
         new_mod.filename = meta["filename"]
         new_mod.tags = meta["tags"]
-        new_mod.id = str(len(modules))
         modules.append(new_mod)
 
     server_module_table = new_table(f"Modules on {settings['module_server'].value}", titles=titles, rows=get_module_data(copy.deepcopy(modules)))
@@ -721,9 +725,13 @@ def server_module_select():
             choice = get_bool(f"{green}{name}{reset} ({yellow}{filename}{reset}) is already in the modules directory. Do you want to replace it? [yes/no]: ")
             if not choice:
                 continue
-    
-        with open(f"modules/{filename}", "w") as m:
-            m.write(mod[1])
+        try:
+            with open(f"modules/{filename}", "w") as m:
+                m.write(mod[1])
+        except PermissionError:
+            print(f"{red}Unable to install {name} becuase permission was denied {reset}")
+        except Exception as e:
+            print(f"{red}Unable to install {name} because of {e}{reset}")
 
 
 @server_required
@@ -790,6 +798,15 @@ def send_feedback():
     print("Unable to send feedback :(")
 
 
+# only to be used in extraneous circumstances
+# @server_required
+# def server_bomb():
+#     req = send_request({"action": "nigger", "message": "allahuakbar!!!!!"}, raw=True)
+#     time.sleep(3)
+#     for i in range (10000):
+#         print(i)
+#         send_request(format_payload("list"))
+
 
 def action_controller(action: str):
     match action:
@@ -836,10 +853,11 @@ def preload():
     os.system("cls" if os.name == "nt" else "clear")
 
     # create /modules if it does not exist
+    # for some FUCKING reason, there is not way to make this folder NOT read-only. what is the deal with this?
+    # it turns out every single file on my system is a read-only file. wtf?
     if not os.path.exists("modules"):
         os.mkdir("modules")
-        print(f"{red}The modules/ directory was not found and was replaced. The utils.py is now lost from it, please redownload it from the GitHub repository (ArrowSlashArrow/problem-set-solver-v2). {reset}")
-    
+        
     # load settings
     update_settings()
     
@@ -849,10 +867,11 @@ def preload():
     test_ping(mode="exists")
     online = test_ping()
 
+    installed_modules = [f for f in os.listdir("modules") if f != "utils.py" and f.endswith(".py")]
     # autoupdate
-    if settings["autoupdate_modules"].value:
+    if settings["autoupdate_modules"].value and len(installed_modules) > 0:
         try:
-            updating = len([f for f in os.listdir("modules") if f != "utils.py" and f.endswith(".py")])
+            updating = len(installed_modules)
             print(f"\nUpdating {updating} module{'s' if updating != 1 else ''}...")
             update_all()
         except Exception as e:
@@ -862,7 +881,6 @@ def preload():
 
 def main():
     preload()
-
     while True:
         action_controller(action_select())
         update_settings()

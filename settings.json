@@ -43,5 +43,15 @@
         "boolean",
         true,
         "Automatically updates all modules at the start of the program"
+    ],
+    "reconnect_timeout": [
+        "positive number",
+        15,
+        "The amount of seconds the script waits before attempting to reconnect to the server"
+    ],
+    "request_waittime": [
+        "positive number",
+        10,
+        "The amount of seconds the script waits before marking a request as 'timed out'"
     ]
 }
