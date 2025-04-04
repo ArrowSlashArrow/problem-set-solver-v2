@@ -228,10 +228,10 @@ def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=F
         return choices
 
 
-def get_metadata(file: str):
+def get_metadata(file: str, raw_str=False):
     current_module = copy.deepcopy(default_module)
     ignore = False
-    raw_data = open(file, "r").read()
+    raw_data = open(file, "r").read() if not raw_str else file
 
     lines = raw_data.split("\n")
     for line in lines:
@@ -307,7 +307,7 @@ def module_select(other_valid_inputs=[]):
     # info messages
     if len(settings['filter_tags'].value) > 0:
         print(f"Searching by these tags: {', '.join(settings['filter_tags'].value)}")
-    print("If no modules show up, type 'back' and try again in a few seconds,. or check your tags setting.")
+    print("If no modules show up, type 'back' and try again in a few seconds, or check your tags setting.")
     console.print(module_table)
 
     # get module
@@ -571,13 +571,14 @@ def format_payload(payload: str, modules=[], feedback=""):
             selected_module = m.filename 
             ready_payload["data"] = open(f"modules/{selected_module}", "r").read()
             ready_payload["filename"] = selected_module
+            ready_payload["mod"] = m.name
             ready_payload["overrideVersion"] = get_bool("> Override the server module's version number? [yes/no]: ")
-            ready_payload["overrideMod"] = get_bool("> Override the module if it exists on the server? [yes/no]: ")
+            ready_payload["overrideMod"] = True
+            ready_payload["session"] = session
         case "feedback":
             ready_payload["session"] = session
             ready_payload["feedback"] = feedback
         case _:
-            print(payload)
             pass
 
     if settings["show_requests"].value:
@@ -592,7 +593,7 @@ def show_response(req):
         print(f"[{colour}RESPONSE{reset}] {req.text}")
 
 
-def send_request(payload, raw=True):
+def send_request(payload, raw=False):
     req = requests.post(server, json=payload, headers=headers, timeout=settings["request_waittime"].value)
     if raw and settings["show_requests"].value:
         print(f"[{yellow}PAYLOAD{reset}] {payload}")
@@ -708,16 +709,17 @@ def server_module_select():
     if selected_modules == "\0":
         return
 
-    print(selected_modules)
     payload = format_payload("install", modules=selected_modules)
-    req = send_request(payload)
-    resp = json.loads(req.text)["data"]
-    for mod in resp:  # mod: [metadata dict, contents]
+    md_payload = format_payload("metadata", modules=selected_modules)
+    mod_req = send_request(payload)
+    md_req = json.loads(send_request(md_payload).text)["data"]
+    mod_resp = json.loads(mod_req.text)["data"]
+    for meta, mod in zip(md_req, mod_resp):  # mod: [metadata dict, contents]
         filename = ""
         name = ""
         try:
-            filename = mod[0]["filename"]
-            name = mod[0]["name"]
+            filename = meta["filename"]
+            name = meta["name"]
         except Exception as e:
             pass
 
@@ -727,9 +729,9 @@ def server_module_select():
                 continue
         try:
             with open(f"modules/{filename}", "w") as m:
-                m.write(mod[1])
+                m.write(mod)
         except PermissionError:
-            print(f"{red}Unable to install {name} becuase permission was denied {reset}")
+            print(f"{red}Unable to install {name} because permission was denied. Make sure that this folder is not read-only. {reset}")
         except Exception as e:
             print(f"{red}Unable to install {name} because of {e}{reset}")
 
