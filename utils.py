@@ -13,32 +13,72 @@ def parse_num(num: str):
             return num
 
 # arbitrary precision arithmetic fraction class
-class Number:
-    def __init__(self, num: str | int | float):
-        numer = 1
-        denom = 1
-        num = parse_num(str(num))
-
-        if type(num) == float:
-            numer = int(num)
-            denom = 10 ** len(str(num).split(".")[1])
-        elif type(num) == int:
-            numer = num
-            denom = 1
+# TODO: rename vars to be clearer, add some other utilities.
+# maybe use `Component` to represent rationals, roots, imaginary nums and imaginary roots.
+class Fraction:
+    # todo: get from string and list representations and float
+    def __init__(self, num, den):
+        if num * den < 0:
+            self.num = -abs(num)
+            self.den = abs(den)
+        elif num * den > 0:
+            self.num = abs(num)
+            self.den = abs(den)
         else:
-            raise ValueError("Invalid input: " + num)
-        
-        self.numer = numer
-        self.denom = denom
-    def multiply(other: Number):
-        self.numer *= other.numer
-        self.denom *= other.denom
+            self.num = 0
+            self.den = 0
+
+        self.simplify()
+
+    def simplify(self):
+        g = math.gcd(self.num, self.den)
+        self.num = self.num // g
+        self.den = self.den // g
+
+    
+    def __add__(self, other):
+        a, b, c, d = self.num, self.den, other.num, other.den
+        denom = math.lcm(b, d)
+        f1, f2 = denom // b, denom // d
+        return Fraction(a * f1 + c * f2, denom)  
+
+    
+    def __sub__(self, other):
+        return self + Fraction(other.num * -1, other.den)
+
+    
+    def __mul__(self, other):
+        if type(other) is int:
+            return Fraction(self.num * other, self.den)
+        if type(other) is float:
+            pass  # todo: float -> fraction, then multiply
+
+        if type(other) is Fraction:
+            return Fraction(self.num * other.num, self.den * other.den)
+        else:  # if not multiplying by a number, 
+            return
+
+    # floordiv doesn't make sense here
+    def __truediv__(self, other):
+        if type(other) is int:
+            return Fraction(self.num, self.den * other)
+        if type(other) is float:
+            pass  # todo: float -> fraction, then divide
+
+        if type(other) is Fraction:
+            return Fraction(self.num * other.den, self.den * other.num)
+        else:  # if not multiplying by a number, 
+            return
+    
+
+    def __str__(self):
+        return f"{self.num}/{self.den}"
 
 
 # mag - magnitude of the vector
 # dir - number in radians or degrees (max: 2pi, 360deg)
 # mode - "rad" or "deg"
-# TODO: set the type of `mag` to be of struct Number
+# TODO: set the type of `mag` to be of struct Fraction
 # TODO: maybe change internal dir to always be radians and convert as needed? (easier operations)
 class Vector:
     def __init__(self, mag: str | int | float, dir: str | int | float, mode = "rad"):
