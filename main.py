@@ -710,18 +710,21 @@ def server_module_select():
         return
 
     payload = format_payload("install", modules=selected_modules)
-    md_payload = format_payload("metadata", modules=selected_modules)
     mod_req = send_request(payload)
-    md_req = json.loads(send_request(md_payload).text)["data"]
     mod_resp = json.loads(mod_req.text)["data"]
-    for meta, mod in zip(md_req, mod_resp):  # mod: [metadata dict, contents]
+    for mod in mod_resp:  # mod: [metadata dict, contents]
+        meta = mod["meta"]
+        data = mod["data"]
         filename = ""
         name = ""
         try:
             filename = meta["filename"]
             name = meta["name"]
         except Exception as e:
-            pass
+            print(f"{yellow}WARNING: Srever sent malformed metadata, using default values.{reset}")
+            temp = "mod_" + str(int(time.time())) 
+            filename = f"{temp}.py"
+            name = temp
 
         if filename in os.listdir("modules"):
             choice = get_bool(f"{green}{name}{reset} ({yellow}{filename}{reset}) is already in the modules directory. Do you want to replace it? [yes/no]: ")
@@ -729,7 +732,7 @@ def server_module_select():
                 continue
         try:
             with open(f"modules/{filename}", "w") as m:
-                m.write(mod)
+                m.write(data)
         except PermissionError:
             print(f"{red}Unable to install {name} because permission was denied. Make sure that this folder is not read-only. {reset}")
         except Exception as e:
@@ -856,26 +859,41 @@ def preload():
 
     # create /modules if it does not exist
     # for some FUCKING reason, there is not way to make this folder NOT read-only. what is the deal with this?
-    # it turns out every single file on my system is a read-only file. wtf?
+    # it turns out every single file on my system is a read-only file (including c:/windows). wtf?
     if not os.path.exists("modules"):
         os.mkdir("modules")
-        
-    # load settings
-    update_settings()
-    
-    # ping server and check connection
-    server = f"https://{settings['module_server'].value}/"
-    print('Testing server connectivity... ') 
-    test_ping(mode="exists")
-    online = test_ping()
 
+    try:
+        with console.status("Loading...", spinner="dots12"):
+            # load settings
+            update_settings()
+        console.print("[bold green]Loaded settings successfully[/bold green]")
+    except:
+        console.print("[bold red]FATAL: Could not load settings\nExiting...[/bold red]")
+        quit()
+
+    with console.status("Testing server connection...", spinner="earth"):
+        # load modules
+        update_module_table()
+        # ping server and check connection
+        server = f"https://{settings['module_server'].value}/"
+        print('Testing server connectivity... ') 
+        test_ping(mode="exists")
+        online = test_ping()
+    if online:
+        console.print("[bold green]Server is online[/bold green]")
+    else:
+        console.print("[bold red]Server is offline. Usability will be limited[/bold red]")
+
+    
     installed_modules = [f for f in os.listdir("modules") if f != "utils.py" and f.endswith(".py")]
     # autoupdate
     if settings["autoupdate_modules"].value and len(installed_modules) > 0:
         try:
-            updating = len(installed_modules)
-            print(f"\nUpdating {updating} module{'s' if updating != 1 else ''}...")
-            update_all()
+            with console.status("Updating modules...", spinner="bouncingBar"):
+                updating = len(installed_modules)
+                print(f"\nUpdating {updating} module{'s' if updating != 1 else ''}...")
+                update_all()
         except Exception as e:
             print(f"{red}Could not autoupdate modules.{reset}")
     print(tutorial_str)
