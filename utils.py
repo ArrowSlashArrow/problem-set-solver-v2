@@ -18,15 +18,24 @@ def parse_num(num: str):
 class Fraction:
     # todo: get from string and list representations and float
     def __init__(self, num, den):
-        if num * den < 0:
-            self.num = -abs(num)
-            self.den = abs(den)
-        elif num * den > 0:
-            self.num = abs(num)
-            self.den = abs(den)
-        else:
-            self.num = 0
-            self.den = 0
+        match num:
+            case int():
+                if num * den < 0:
+                    self.num = -abs(num)
+                    self.den = abs(den)
+                elif num * den > 0:
+                    self.num = abs(num)
+                    self.den = abs(den)
+                else:
+                    self.num = 0
+                    self.den = 0
+            case float():
+                if den:
+                    raise ValueError(f"Unable to create a fraction from two floats; only one is required.")
+
+                whole, decimal = math.floor(num), num % 1
+                
+
 
         self.simplify()
 
