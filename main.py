@@ -117,7 +117,8 @@ boilerplate = """# name: <NAME>
 # tags: <TAGS>
 # version: 1
 # made by <USER> on <DATE>
-import utils, math, sympy
+import math, sympy
+from utils import * 
 
 def solver():
     pass
