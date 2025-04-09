@@ -118,7 +118,7 @@ boilerplate = """# name: <NAME>
 # version: 1
 # made by <USER> on <DATE>
 import math, sympy
-from utils import * 
+from utils import *
 
 def solver():
     pass
@@ -356,10 +356,10 @@ def check_module(path: str):
 def load_module(module: Module):
     module_obj = check_module(f"modules/{module.filename}")
     if module_obj:
-        try:
+        # try:
             module_obj.solver()
-        except Exception as e:
-            console.print(f"[red]{module.name} crashed :([/]")
+        # except Exception as e:
+            # console.print(f"[red]{module.name} crashed :([/]")
     else:
         console.print(f"\n[yellow]{module.name} does not have a solver() function. Unable to run module.[/]\n")
 
@@ -563,7 +563,7 @@ def format_payload(payload: str, modules=[], feedback=""):
             ready_payload["data"] = open(f"modules/{selected_module}", "r").read()
             ready_payload["filename"] = selected_module
             ready_payload["mod"] = m.name
-            ready_payload["overrideVersion"] = get_bool("> Override the server module's version number? [yes/no]: ")
+            ready_payload["overrideVersion"] = False
             ready_payload["overrideMod"] = True
             ready_payload["session"] = session
         case "feedback":
