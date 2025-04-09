@@ -105,6 +105,7 @@ actions = {
     "Export module to server": "ex",
     "Display all modules on server": "sls",
     "Change settings": "set",
+    "Update the script": "upd",
     "Print user guide": "guide",
     "Send feedback": "sfb",
     "Exit": "x"
@@ -801,6 +802,21 @@ def send_feedback():
 #         print(i)
 #         send_request(format_payload("list"))
 
+def update_self():
+    with console.status("Downloading latest version of script...", spinner="earth"):
+        req = requests.get("https://raw.githubusercontent.com/ArrowSlashArrow/problem-set-solver-v2/refs/heads/main/main.py")
+        # get file
+        if req.status_code != 200:
+            console.print("[red]Could not download the new script.[/]")
+            return
+        console.print("[green]Successfully downloaded the script[/]")
+        # write to file
+        try:
+            open("main.py", "w").write(req.text)
+            console.print(f"[green]Successfully updated the script :)[/]")
+        except Exception as e:
+            console.print(f"[red]Could not write to file because {e}[/]")
+
 
 def action_controller(action: str):
     match action:
@@ -832,6 +848,11 @@ def action_controller(action: str):
             list_server_modules()
         case "Change settings":
             change_settings()
+        case "Update the script":
+            try:
+                update_self()
+            except Exception as e:
+                console.print(f"[red]could not update the script because {e}[/]")
         case "Print user guide":
             console.print(tutorial_str)
         case "Send feedback":
