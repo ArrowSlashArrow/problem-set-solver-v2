@@ -88,7 +88,7 @@ To create a module, you must know how to write basic code in python, and if you 
 Your modules should not contain any dependencies or import other than utils.
 If you don't know how to write code, you can contact me to make it at @arrowslasharrow on Discord.
 
-Made by </> (arrow) and bitfeller on 2025/03/19, last updated on v1.0.1 at 2025/04/07
+Made by </> (arrow) and bitfeller on 2025/03/19, last updated on v1.0.1 at 2025/04/09
 --------------------------------[ [red]END TUTORIAL[/] ]--------------------------------
 """)
 

@@ -55,7 +55,9 @@ class Fraction:
 
                     # remove all empty strings
                     parts = [p for p in frac.split(" ") if p != ""]
-                    if "/" not in parts[0] and "/" not in parts[1]:
+                    if len(parts) > 1 and "/" in parts[1]:  # detect properly formatted fraction and skip
+                        pass
+                    elif "/" not in parts[0] and "/" not in parts[1]:
                         if "/" not in parts[-1]:
                             parts[1] = "".join(parts[1:])
                             parts = parts[:2]
