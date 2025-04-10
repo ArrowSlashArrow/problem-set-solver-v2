@@ -938,21 +938,22 @@ def preload():
     print()
     installed_modules = [f for f in os.listdir("modules") if f != "utils.py" and f.endswith(".py")]
     # autoupdate
-    if settings["autoupdate_modules"].value and len(installed_modules) > 0:
-        try:
+    try:
+        if settings["autoupdate_modules"].value and len(installed_modules) > 0:
             updating = len(installed_modules)
             with console.status(f"\nUpdating {updating} module{'s' if updating != 1 else ''}...", spinner="bouncingBar"):
                 update_all(status_text=True)
-        except Exception as e:
-            console.print(f"[red]Could not update modules.[/]")
+    except Exception as e:
+        console.print(f"[red]Could not update modules.[/]")
+    
     print()
-    if settings["autoupdate_script"]:
-        try:
+    try:
+        if settings["autoupdate_script"]:
             with console.status(f"\nUpdating the script...", spinner="bouncingBar"):
                 update_self()
                 restart(updating=True)
-        except Exception as e:
-            console.print(f"[red]Could not update the script ({e})[/]")
+    except Exception as e:
+        console.print(f"[red]Could not update the script ({e})[/]")
     console.print(tutorial_str)
 
 
