@@ -22,7 +22,7 @@ except ModuleNotFoundError as e:
         print("Restarting the script...")
         if os.name == "posix":
             print("tkinter might not be installed.Run one of these commands depending on your distro:")
-            print("- Ubuntu/Debian: sudo apt install python3-tk\n - Fedora: sudo dnf install python3-tkinter\n - Arch: sudo pacman -S tk")
+            print(" - Ubuntu/Debian: sudo apt install python3-tk\n - Fedora: sudo dnf install python3-tkinter\n - Arch: sudo pacman -S tk")
             quit()
         else:
             restart()
@@ -135,6 +135,14 @@ actions = {
     "Send feedback": "sfb",
     "Exit": "x"
 }
+
+update_files = [
+    "main.py",
+    "utils.py",
+    "settings.json",
+    "requirements.txt",
+    "README.md"
+]
 
 # name, desc, tags, version, 
 boilerplate = """# name: <NAME>
@@ -829,31 +837,20 @@ def send_feedback():
 #         send_request(format_payload("list"))
 
 def update_self():
-    req = requests.get("https://raw.githubusercontent.com/ArrowSlashArrow/problem-set-solver-v2/refs/heads/main/main.py")
-    # get file
-    if req.status_code != 200:
-        console.print("[red]Could not download the new script.[/]")
-        return
-    console.print("[green]Successfully downloaded the script... [/]", end="")
-    # write to file
-    try:
-        open("main.py", "w").write(req.text)
-        console.print(f"[green]Successfully updated the script :)[/]")
-    except Exception as e:
-        console.print(f"[red]Could not write to script file because {e}[/]")
+    for file in update_files:
 
-    req = requests.get("https://raw.githubusercontent.com/ArrowSlashArrow/problem-set-solver-v2/refs/heads/main/utils.py")
-    # get file
-    if req.status_code != 200:
-        console.print("[red]Could not download the new utils file.[/]")
-        return
-    console.print("[green]Successfully downloaded the utils file... [/]", end="")
-    # write to file
-    try:
-        open("utils.py", "w").write(req.text)
-        console.print(f"[green]Successfully updated the utils file :)[/]")
-    except Exception as e:
-        console.print(f"[red]Could not write to utils file because {e}[/]")
+        req = requests.get(f"https://raw.githubusercontent.com/ArrowSlashArrow/problem-set-solver-v2/refs/heads/main/{file}")
+        # get file
+        if req.status_code != 200:
+            console.print(f"[red]Could not download {file}.[/]")
+            return
+        console.print(f"[green]Successfully downloaded {file}... [/]", end="")
+        # write to file
+        try:
+            open("main.py", "w").write(req.text)
+            console.print(f"[green]Successfully updated {file} :)[/]")
+        except Exception as e:
+            console.print(f"[red]Could not write to {file} because {e}[/]")
 
 
 def action_controller(action: str):
