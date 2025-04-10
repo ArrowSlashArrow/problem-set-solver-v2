@@ -780,7 +780,11 @@ def update_module(module=""):
         module = module_select()
         if not module: 
             return
-        
+
+    filename = f'modules/{module.filename}'
+    # make backup
+    shutil.copyfile(filename, f'{filename}.bak')
+
     req = send_request(format_payload("version", [module]))
     if json.loads(req.text)["success"] == 1:
         version = int(json.loads(req.text)["data"][0])
@@ -791,7 +795,7 @@ def update_module(module=""):
             req = send_request(payload)
             mod = json.loads(req.text)["data"][0]
             
-            with open(f"modules/{module.filename}", "w") as m:
+            with open(filename, "w") as m:
                 m.write(mod[1])    
             console.print(f"[green]Updated {module.get_str()}[/]")
         else:
@@ -802,6 +806,10 @@ def update_module(module=""):
                 console.print(f"[red]Unable to update {module.get_str()} because it is not on the server.[/]")
             case _:
                 console.print(f"[red]Unable to update {module.get_str()}[/]")
+        shutil.copyfile(f'{filename}.bak', filename)
+
+    os.remove(f'{filename}.bak')
+            
 
 
 def update_all(status_text=False):
@@ -838,7 +846,8 @@ def send_feedback():
 
 def update_self():
     for file in update_files:
-
+        # make backup
+        shutil.copyfile(file, f'{file}.bak')
         req = requests.get(f"https://raw.githubusercontent.com/ArrowSlashArrow/problem-set-solver-v2/refs/heads/main/{file}")
         # get file
         if req.status_code != 200:
@@ -850,7 +859,9 @@ def update_self():
             open(file, "w").write(req.text)
             console.print(f"[green]Successfully updated {file} :)[/]")
         except Exception as e:
-            console.print(f"[red]Could not write to {file} because {e}[/]")
+            console.print(f"[red]Could not write to {file} because {e}[/]\n[yellow]Reverting to old copy of {file}...[/]")
+            shutil.copyfile(f'{file}.bak', file)
+        os.remove(f'{file}.bak')
 
 
 def action_controller(action: str):
