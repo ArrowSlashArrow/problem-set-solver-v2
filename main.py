@@ -816,7 +816,20 @@ def update_self():
             open("main.py", "w").write(req.text)
             console.print(f"[green]Successfully updated the script :)[/]")
         except Exception as e:
-            console.print(f"[red]Could not write to file because {e}[/]")
+            console.print(f"[red]Could not write to script file because {e}[/]")
+
+        req = requests.get("https://raw.githubusercontent.com/ArrowSlashArrow/problem-set-solver-v2/refs/heads/main/utils.py")
+        # get file
+        if req.status_code != 200:
+            console.print("[red]Could not download the new utils file.[/]")
+            return
+        console.print("[green]Successfully downloaded the utils file[/]")
+        # write to file
+        try:
+            open("utils.py", "w").write(req.text)
+            console.print(f"[green]Successfully updated the utils file :)[/]")
+        except Exception as e:
+            console.print(f"[red]Could not write to utils file because {e}[/]")
 
 
 def action_controller(action: str):
