@@ -14,30 +14,35 @@ def parse_num(num: str):
             return num
 
 
+def get_valid_fraction(msg):
+    while True:
+        try:
+            return Fraction(input(msg))
+        except Exception:
+            print("Invalid input. Please try again")
+
+
 # arbitrary precision arithmetic fraction class
 # todo: clean up this class (never nester technique)
 class Fraction:
-
     def __init__(self, num, den=None):
-        match num:
-            case int():
-                self.num = num
-                self.den = den if den else 1
-            case float():
-                if den:
-                    raise ValueError(
-                        f"Unable to create a Fraction from two floats; only one is required."
-                    )
+        if type(num) is int:
+            self.num = num
+            self.den = den if den else 1
+        elif type(num) is float:
+            if den:
+                raise ValueError(f"Unable to create a Fraction from two floats; only one is required.")
 
-                whole, decimal = math.floor(num), num % 1
-                factor = 10**len(str(decimal)[2:])
-                self.num = int(whole * factor + decimal * factor)
-                self.den = factor
-            case str():
-                if den:
-                    raise ValueError(
-                        f"Unable to create a Fraction from two strings; only one is required."
-                    )
+            whole, decimal = math.floor(num), num % 1
+            factor = 10**len(str(decimal)[2:])
+            self.num = int(whole * factor + decimal * factor)
+            self.den = factor
+        elif type(num) is str:
+            if den:
+                frac = Fraction(num) / Fraction(den)
+                self.num = frac.num
+                self.den = frac.den
+            else:
                 frac = parse_num(num.lstrip().rstrip())
                 if type(frac) is not str:
                     new_frac = Fraction(frac)
@@ -45,22 +50,21 @@ class Fraction:
                     self.den = new_frac.den
                 else:  # assume it is a mixed number
                     extra_chars = frac.strip("0123456789/ ")
-                    if len(
-                            extra_chars
-                    ) > 0:  # if there are any extra characters, it is not a valid fraction
-                        raise ValueError(
-                            f"Unable to create a Fraction from {frac}; it is not a valid fraction."
-                        )
+                    if len(extra_chars) > 0 or frac.count("/") > 1:  # if there are any extra characters, it is not a valid fraction
+                        raise ValueError(f"Unable to create a Fraction from {frac}; it is not a valid fraction.")
 
                     # remove all empty strings
-                    parts = frac.split(" ")
-                    while "" in parts:
-                        parts.remove("")
-                    parts[1] = "".join(parts[1:])
-                    while len(parts) > 2:
-                        parts.pop(2)
+                    parts = [p for p in frac.split(" ") if p != ""]
+                    if "/" not in parts[0] and "/" not in parts[1]:
+                        if "/" not in parts[-1]:
+                            parts[1] = "".join(parts[1:])
+                            parts = parts[:2]
+                    else:
+                        parts = ["".join(parts)]
                     
+                    # parts should be ['a/b'] or ['a', 'b/c']
                     if len(parts) == 2:  # mixed fraction (a b/c)
+                        parts[1] = "".join(parts[1:])
                         improper = [int(n) for n in parts[1].split("/")]
                         denom = improper[1]
                         frac = Fraction(
@@ -68,26 +72,21 @@ class Fraction:
                         self.num = frac.num
                         self.den = frac.den
                     elif len(parts) == 1:  # improper fraction (a/b)
+                    
                         frac = Fraction(parts[0].split("/"))
                         self.num = frac.num
                         self.den = frac.den
-                    else:
-                        raise ValueError(
-                            f"Unable to create a Fraction from {frac}; it is not a valid fraction."
-                        )
-            case list():
-                if den:
-                    raise ValueError(
-                        f"Unable to create a Fraction from two lists; only one is required."
-                    )
-                # can't set self to the new fraction for some reason
-                if len(num) > 2:  # support x/ y
-                    raise ValueError(
-                        "Cannot create a Fraction from a list with more than 2 elements."
-                    )
-                frac = Fraction(*num)
-                self.num = frac.num
-                self.den = frac.den
+        elif type(num) is list:
+            if den:
+                raise ValueError(f"Unable to create a Fraction from two lists; only one is required.")
+            # can't set self to the new fraction for some reason
+            if len(num) > 2:
+                raise ValueError("Cannot create a Fraction from a list with more than 2 elements.")
+            frac = Fraction(*num)
+            self.num = frac.num
+            self.den = frac.den
+        else:
+            raise ValueError(f"Cannot create a Fraction from {num} and {den}")
 
         if self.num * self.den < 0:
             self.num = -abs(self.num)
