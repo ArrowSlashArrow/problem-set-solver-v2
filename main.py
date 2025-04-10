@@ -847,7 +847,7 @@ def update_self():
         console.print(f"[green]Successfully downloaded {file}... [/]", end="")
         # write to file
         try:
-            open("main.py", "w").write(req.text)
+            open(file, "w").write(req.text)
             console.print(f"[green]Successfully updated {file} :)[/]")
         except Exception as e:
             console.print(f"[red]Could not write to {file} because {e}[/]")
