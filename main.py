@@ -1,9 +1,34 @@
+import os, sys, subprocess  # theres no way these every fail to import
+
+restart_enabled = False if "-no-restard" not in sys.argv else True
+def restart(updating=False):
+    if not restart_enabled:
+        return
+    print("Restarting script...")
+    args = [sys.executable, __file__] + sys.argv
+    if updating:
+        args.append("--no-restart")
+    os.execv(sys.executable, args)
+
+install_str = f"{sys.executable} -m pip install --upgrade --force-reinstall --break-system-packages -r requirements.txt"
+
 try:
-    import os, importlib.util, json, easygui, shutil, copy, time, requests, ping3
+    import importlib.util, json, easygui, shutil, copy, time, requests, ping3
     from rich import console, table, prompt, text
-except ModuleNotFoundError:
-    print("[\x1b[38;5;9mFATAL\x1b[0m] \x1b[38;5;9mThe requied modules are not installed. Please install them by running the command 'pip install -r requirements.txt'\x1b[0m")
-    quit()
+except ModuleNotFoundError as e:
+    try:
+        print("Installing required modules...")
+        subprocess.check_call(install_str.split(" "))
+        print("Restarting the script...")
+        if os.name == "posix":
+            print("tkinter might not be installed.Run one of these commands depending on your distro:")
+            print("- Ubuntu/Debian: sudo apt install python3-tk\n - Fedora: sudo dnf install python3-tkinter\n - Arch: sudo pacman -S tk")
+            quit()
+        else:
+            restart()
+    except Exception as e:
+        print(f"\x1b[38;5;9mFATAL\x1b[0m] \x1b[38;5;9mCould not install the required libraries. please run '{install_str}'\n Error: {e}\x1b[0m")
+    
 
 # nicer way of storing modules
 # also python law dictates that every main.py must have at least one struct
@@ -804,32 +829,31 @@ def send_feedback():
 #         send_request(format_payload("list"))
 
 def update_self():
-    with console.status("Downloading latest version of script...", spinner="earth"):
-        req = requests.get("https://raw.githubusercontent.com/ArrowSlashArrow/problem-set-solver-v2/refs/heads/main/main.py")
-        # get file
-        if req.status_code != 200:
-            console.print("[red]Could not download the new script.[/]")
-            return
-        console.print("[green]Successfully downloaded the script[/]")
-        # write to file
-        try:
-            open("main.py", "w").write(req.text)
-            console.print(f"[green]Successfully updated the script :)[/]")
-        except Exception as e:
-            console.print(f"[red]Could not write to script file because {e}[/]")
+    req = requests.get("https://raw.githubusercontent.com/ArrowSlashArrow/problem-set-solver-v2/refs/heads/main/main.py")
+    # get file
+    if req.status_code != 200:
+        console.print("[red]Could not download the new script.[/]")
+        return
+    console.print("[green]Successfully downloaded the script... [/]", end="")
+    # write to file
+    try:
+        open("main.py", "w").write(req.text)
+        console.print(f"[green]Successfully updated the script :)[/]")
+    except Exception as e:
+        console.print(f"[red]Could not write to script file because {e}[/]")
 
-        req = requests.get("https://raw.githubusercontent.com/ArrowSlashArrow/problem-set-solver-v2/refs/heads/main/utils.py")
-        # get file
-        if req.status_code != 200:
-            console.print("[red]Could not download the new utils file.[/]")
-            return
-        console.print("[green]Successfully downloaded the utils file[/]")
-        # write to file
-        try:
-            open("utils.py", "w").write(req.text)
-            console.print(f"[green]Successfully updated the utils file :)[/]")
-        except Exception as e:
-            console.print(f"[red]Could not write to utils file because {e}[/]")
+    req = requests.get("https://raw.githubusercontent.com/ArrowSlashArrow/problem-set-solver-v2/refs/heads/main/utils.py")
+    # get file
+    if req.status_code != 200:
+        console.print("[red]Could not download the new utils file.[/]")
+        return
+    console.print("[green]Successfully downloaded the utils file... [/]", end="")
+    # write to file
+    try:
+        open("utils.py", "w").write(req.text)
+        console.print(f"[green]Successfully updated the utils file :)[/]")
+    except Exception as e:
+        console.print(f"[red]Could not write to utils file because {e}[/]")
 
 
 def action_controller(action: str):
@@ -912,7 +936,15 @@ def preload():
             with console.status(f"\nUpdating {updating} module{'s' if updating != 1 else ''}...", spinner="bouncingBar"):
                 update_all(status_text=True)
         except Exception as e:
-            console.print(f"[red]Could not autoupdate modules.[/]")
+            console.print(f"[red]Could not update modules.[/]")
+    print()
+    if settings["autoupdate_script"]:
+        try:
+            with console.status(f"\nUpdating the script...", spinner="bouncingBar"):
+                update_self()
+                restart(updating=True)
+        except Exception as e:
+            console.print(f"[red]Could not update the script ({e})[/]")
     console.print(tutorial_str)
 
 
@@ -922,5 +954,11 @@ def main():
         action_controller(action_select())
         update_settings()
 
-if __name__ == "__main__":
-    main()
+# this is just bloatware atp
+try:
+    if __name__ == "__main__":
+        main()
+except KeyboardInterrupt:
+    print("\nExiting...")
+except Exception as e:
+    print(f"Script crashed ({e})\nExiting...")
