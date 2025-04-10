@@ -356,10 +356,10 @@ def check_module(path: str):
 def load_module(module: Module):
     module_obj = check_module(f"modules/{module.filename}")
     if module_obj:
-        # try:
+        try:
             module_obj.solver()
-        # except Exception as e:
-            # console.print(f"[red]{module.name} crashed :([/]")
+        except Exception as e:
+            console.print(f"[red]{module.name} crashed :([/]")
     else:
         console.print(f"\n[yellow]{module.name} does not have a solver() function. Unable to run module.[/]\n")
 
