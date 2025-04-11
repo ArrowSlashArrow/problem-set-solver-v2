@@ -139,7 +139,6 @@ actions = {
 update_files = [
     "main.py",
     "utils.py",
-    "settings.json",
     "requirements.txt",
     "README.md"
 ]
