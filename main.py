@@ -391,7 +391,7 @@ def load_module(module: Module):
         try:
             module_obj.solver()
         except Exception as e:
-            console.print(f"[red]{module.name} crashed :([/]")
+            console.print(f"[red]{module.name} crashed :( Error: {e}[/]")
     else:
         console.print(f"\n[yellow]{module.name} does not have a solver() function. Unable to run module.[/]\n")
 
@@ -947,7 +947,7 @@ def preload():
     
     print()
     try:
-        if settings["autoupdate_script"]:
+        if settings["autoupdate_script"].value:
             with console.status(f"\nUpdating the script...", spinner="bouncingBar"):
                 update_self()
                 restart(updating=True)
