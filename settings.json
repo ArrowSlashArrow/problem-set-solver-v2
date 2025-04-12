@@ -46,7 +46,7 @@
     ],
     "autoupdate_script": [
         "boolean",
-        true,
+        false,
         "Automatically updates the script upon startup"
     ],
     "reconnect_timeout": [

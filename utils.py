@@ -2,7 +2,8 @@
 # ignore_module
 import sympy, math
 
-
+PI = math.pi
+RAD2DEG = 180 / PI
 # parse num util function
 def parse_num(num: str):
     try:
@@ -20,6 +21,22 @@ def get_valid_fraction(msg):
             return Fraction(input(msg))
         except Exception:
             print("Invalid input. Please try again")
+
+
+# do NOT touch this, you will fuck everything up
+def clamp_angle(angle, radians=True):
+    return ((1 - 2 * int(abs(angle) != angle)) * (abs(angle) % [360, 2 * PI][int(radians)]) + 2 * [360, PI][int(radians)]) % [360, PI][int(radians)]
+
+
+def rounded_str(num: float, precision: int=3):
+    rnd = round(num, precision)
+    if rnd.is_integer():
+        rnd = int(rnd)
+    return str(rnd)
+
+
+def signstr(num: float | int):
+    return ("-" if abs(num) != num else "+") + str(abs(num))
 
 
 # arbitrary precision arithmetic fraction class
@@ -143,52 +160,127 @@ class Fraction:
         return f"{self.num}/{self.den}"
 
 
-# mag - magnitude of the vector
-# dir - number in radians or degrees (max: 2pi, 360deg)
-# mode - "rad" or "deg"
-# TODO: set the type of `mag` to be of struct Fraction
-# TODO: maybe change internal dir to always be radians and convert as needed? (easier operations)
+# radius: radius of vector, interpreted as x if polar = False
+# angle: angle of vector, interepreted as y in polar = True
+# polar: polar or cartesian?
+# radians: radians or degrees?
 class Vector:
-
-    def __init__(self,
-                 mag: str | int | float,
-                 dir: str | int | float,
-                 mode="rad"):
-        self.mag = parse_num(str(mag))
-        self.dir = parse_num(str(dir))
-        self.__fix_angle__()
-        self.mode = mode
-
-    def add(self, other):
-        pass
-
-    def subtract(self, other):
-        pass
-
-    def multiply(self, other):
-        pass
-
-    def convert(self, mode="rad"):
-        if self.mode == mode:
-            return False
-
-        if mode == "rad":
-            self.dir *= math.pi / 180
+    def __init__(self, radius: float | int, angle: float | int, polar: bool=False, radians: bool=True):
+        self.polar = polar
+        self.radians = radians
+        if polar:
+            self.radius = float(radius)
+            self.angle = clamp_angle(float(angle), radians)
+            if abs(self.radius) != self.radius:
+                self.radius = abs(self.radius)
+                self.angle += PI if self.radians else 180
         else:
-            self.dir *= 180 / math.pi
+            self.x = float(radius)
+            self.y = float(angle)
+        
 
-        return True
+    def __add__(self, other):
+        radians = self.radians or other.radians
+        polar = self.polar and other.polar
 
-    def __fix_angle__(self):
-        if self.dir < 0:
-            if self.mode == "rad":
-                self.dir = math.pi * 2 + self.dir
-            else:
-                self.dir = 360 + self.dir
-            # recurse to make sure it still isn't negative
-            return self.__fix_angle__()
+        self.to_cartesian()
+        other.to_cartesian()
 
-        return
+        added = Vector(self.x + other.x, self.y + other.y)
 
-    def get_str(self):
-        return str(self.mag) + "/" + str(self.dir) + self.mode
+        if polar:
+            added.to_polar()
+        if radians:
+            added.to_radians()
+
+        return added
+
+    def __sub__(self, other):
+        radians = self.radians or other.radians
+        polar = self.polar and other.polar
+
+        self.to_cartesian()
+        other.to_cartesian()
+
+        added = Vector(self.x - other.x, self.y - other.y)
+
+        if polar:
+            added.to_polar()
+        if radians:
+            added.to_radians()
+
+        return added
+
+    def __str__(self):
+        if self.polar:
+            return f"{rounded_str(self.radius)}∠ {rounded_str(self.angle)}"
+        else:
+            return f"{rounded_str(self.x)}î {signstr(round(self.y, 3))}ĵ"
+
+    def to_polar(self):
+        if self.polar:
+            return
+
+        self.radius = math.sqrt(self.x * self.x + self.y * self.y)  
+        rho = math.atan(abs(self.y / self.x)) if self.x != 0 else 0 # in radians
+
+        axes = [self.x >= 0, self.y >= 0]
+
+        if all(axes):  # Q1
+            self.angle = rho
+        elif axes[1]:  # Q2
+            self.angle = PI - rho
+        elif not any(axes): # Q3
+            self.angle = PI + rho
+        else:  # Q4
+            self.angle = 2 * PI - rho
+        if not self.radians:
+            self.to_degrees()
+
+        self.polar = True
+
+
+    def to_cartesian(self):
+        if not self.polar:
+            return
+        
+        mult = 1 if self.radians else RAD2DEG
+        self.x = self.radius * math.cos(self.angle) * mult
+        self.y = self.radius * math.sin(self.angle) * mult
+
+        self.polar = False
+
+    def to_radians(self):
+        if not self.polar or self.radians:
+            return
+        
+        self.angle *= RAD2DEG
+
+    def to_degrees(self):
+        if not self.polar or not self.radians:
+            return
+        
+        self.angle /= RAD2DEG
+
+    def print_state(self):
+        try:
+            rad = self.radius
+            rstr = "radius"
+        except Exception:
+            rad = self.x
+            rstr = "x"
+
+        try:
+            ang = self.angle
+            astr = "angle"
+        except Exception:
+            ang = self.y
+            astr = "y"
+        infostr = f"""
+        {rstr}: {rad}
+        {astr}: {ang}
+        polar: {self.polar}
+        radians: {self.radians}
+        """
+
+        print(infostr)
