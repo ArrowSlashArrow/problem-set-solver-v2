@@ -31,7 +31,7 @@
     ],
     "show_requests": [
         "boolean",
-        false,
+        true,
         "Show traffic sent and recieved from the module server"
     ],
     "shorthand_actions": [
@@ -56,7 +56,7 @@
     ],
     "request_waittime": [
         "positive number",
-        15,
+        16,
         "The amount of seconds the script waits before marking a request as 'timed out'"
     ]
 }

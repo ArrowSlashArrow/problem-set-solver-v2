@@ -245,8 +245,8 @@ class Vector:
             return
         
         mult = 1 if self.radians else RAD2DEG
-        self.x = self.radius * math.cos(self.angle) * mult
-        self.y = self.radius * math.sin(self.angle) * mult
+        self.x = self.radius * math.cos(self.angle * mult)
+        self.y = self.radius * math.sin(self.angle * mult)
 
         self.polar = False
 
@@ -255,12 +255,14 @@ class Vector:
             return
         
         self.angle *= RAD2DEG
+        self.radians = True
 
     def to_degrees(self):
         if not self.polar or not self.radians:
             return
         
         self.angle /= RAD2DEG
+        self.radians = False
 
     def print_state(self):
         try:
@@ -271,7 +273,9 @@ class Vector:
             rstr = "x"
 
         try:
-            ang = self.angle
+            ang = str(self.angle)
+            if not self.radians:
+                ang += "°"
             astr = "angle"
         except Exception:
             ang = self.y
