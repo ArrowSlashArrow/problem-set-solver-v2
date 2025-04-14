@@ -1,27 +1,45 @@
-import os, sys, subprocess  # theres no way these every fail to import
+import os, sys, subprocess, time  # theres no way these every fail to import
+log_file = ".log"
+class Event:
+    def __init__(self, name="UNKNOWN EVENT", **kwargs):
+        self.values = kwargs
+        divider = " | " if len(kwargs) > 0 else ""
+        open(log_file, "a").write(f"[{time.time():.3f} {name.upper()}{divider}{str(self.values)[1:-1]}]\n")
 
-restart_enabled = False if "-no-restard" not in sys.argv else True
+restart_enabled = False if "--no-restart" in sys.argv else True
+no_exit_text = True if "--no-exit-text" in sys.argv else False
+
+if log_file not in os.listdir():
+    open(log_file, "w").close()
+elif not "--restarting" in sys.argv:
+    open(log_file, "a").write("\n")
+    Event("START PROGRAM")
+
 def restart(updating=False):
     if not restart_enabled:
+        if not updating:
+            print("Restart is disabled")
         return
+    Event("RESTART", REASON="UPDATING" if updating else "USER RESTART")
     print("Restarting script...")
     args = [sys.executable, __file__] + sys.argv
     if updating:
         args.append("--no-restart")
-    os.execv(sys.executable, args)
+    subprocess.run(args + ["--restarting"])
 
 install_str = f"{sys.executable} -m pip install --upgrade --force-reinstall --break-system-packages -r requirements.txt"
-
+# todo alternating colours
 try:
-    import importlib.util, json, easygui, shutil, copy, time, requests, ping3
+    import importlib.util, json, easygui, shutil, copy, requests, ping3
     from rich import console, table, prompt, text
 except ModuleNotFoundError as e:
     try:
+        Event("installing dependencies")
         print("Installing required modules...")
         subprocess.check_call(install_str.split(" "))
         print("Restarting the script...")
         if os.name == "posix":
-            print("tkinter might not be installed.Run one of these commands depending on your distro:")
+            print("tkinter might not be installed. Run one of these commands depending on your distro:")
             print(" - Ubuntu/Debian: sudo apt install python3-tk\n - Fedora: sudo dnf install python3-tkinter\n - Arch: sudo pacman -S tk")
             quit()
         else:
@@ -133,6 +151,7 @@ actions = {
     "Update the script": "upd",
     "Print user guide": "guide",
     "Send feedback": "sfb",
+    "Restart": "r",
     "Exit": "x"
 }
 
@@ -272,6 +291,7 @@ def get_metadata(file: str, raw_str=False):
 
 def refresh_modules(loaded_text=False):
     global modules
+    Event("refreshed mods")
     module_files = [m for m in os.listdir("modules") if m.endswith(".py") and os.path.isfile(f"modules/{m}")]
 
     modules = []
@@ -341,7 +361,9 @@ def module_select(other_valid_inputs=[]):
         return choice
     # map choice index to module
     choice_index = module_names.index(choice)
-    return modules[choice_index]
+    mod = modules[choice_index]
+    Event("module choice", MODULE=mod.filename)
+    return mod
 
 
 def action_select():
@@ -369,6 +391,7 @@ def action_select():
         choice = full_actions[shorthand.index(choice)]
     elif choice in lower_actions:
         choice = full_actions[lower_actions.index(choice)]
+    Event("ACTION", ACTION=choice)
     return choice
         
 
@@ -387,12 +410,16 @@ def check_module(path: str):
 
 def load_module(module: Module):
     module_obj = check_module(f"modules/{module.filename}")
+    Event("START MODULE", MODULE=module.filename)
     if module_obj:
         try:
             module_obj.solver()
+            Event("END MODULE", STATUS="OK")
         except Exception as e:
+            Event("END MODULE", STATUS="CRASH")
             console.print(f"[red]{module.name} crashed :( Error: {e}[/]")
     else:
+        Event("END MODULE", STATUS="NO SOLVER")
         console.print(f"\n[yellow]{module.name} does not have a solver() function. Unable to run module.[/]\n")
 
 
@@ -440,7 +467,7 @@ def change_settings():
         case "positive number":
             parsed = parse_num(inp)
             if type(parsed) not in [float, int]:
-                console.print(f"[yellow]Unable to set {choice} to {inp}, the new value should be a positive number[/]")
+                console.print(f"[yellow] Unable to set {choice} to {inp}, the new value should be a positive number[/]")
                 return
             if abs(parsed) != parsed and parsed != 0:
                 console.print(f"[yellow] Unable to set {choice} to {inp}, the new value must be positive.[/]")
@@ -448,7 +475,9 @@ def change_settings():
             inp = parsed 
 
     # change and save setting
+    Event("SETTING CHANGE", SETTING=choice, VALUE=inp)
     settings[choice].value = inp
+    Event("SAVED SETTINGS")
     json.dump(format_settings(settings), open("settings.json", "w"), indent=4)
 
 
@@ -477,12 +506,15 @@ def local_file_select():
     # check for solver function
     if not check_module(filename):
         console.print(f"[yellow]{selected_file} does not have a solver() function. It cannot be ran as a module and will not be imported.[/yellow]")
-    
+        Event("LOAD LOCAL MODULE", STATUS="NO SOLVER")
+
     try:  # copy file to modules/ directory
         shutil.copy(selected_file, "modules")
         console.print(f"[green]Loaded {filename} successfully[/]")
+        Event("LOAD LOCAL MODULE", STATUS="OK")
     except Exception as e:
         console.print(f"[red]Could not read {selected_file} because {e}[/]")
+        Event("LOAD LOCAL MODULE", STATUS="FAILED", REASON=e)
 
 
 def delete_module():
@@ -498,13 +530,15 @@ def delete_module():
         try:
             for file in [f for f in os.listdir("modules") if f != "utils.py"]:
                 os.remove(f"modules/{file}")
+            Event("DELETED ALL MODULES", STATUS="OK")
         except Exception as e:
-            pass
+            Event("DELETED ALL MODULES", STATUS="FAILED", REASON=e)
     else:
         if settings["confirm_delete"].value:
             if not get_bool(f"Are you sure you want to delete {module.name} ({module.filename})?"):
                 return
         os.remove(f"modules/{module.filename}")
+        Event(f"DELETED {module.filename}")
 
 
 def create_module():
@@ -533,9 +567,12 @@ def create_module():
             f.write(content)
 
         console.print(f"[green]successfully created {filename}.py[/]")
+        Event(f"CREATED {filename}.py", STATUS="OK")
     except Exception as e:
         console.print(f"[red]could not create {filename}.py[/]")
+        Event(f"CREATED {filename}.py", STATUS="FAILED", REASON=e)
 
+# todo: finish pasting all the events everywhere
 ## SERVER STUFF ##
 session = None
 online = False
@@ -601,12 +638,15 @@ def format_payload(payload: str, modules=[], feedback=""):
         case "feedback":
             ready_payload["session"] = session
             ready_payload["feedback"] = feedback
+        case "log":
+            Event("SESSION", SESSION=session)
+            ready_payload["log"] = open(".log", "r").read().split("\n\n")[-1]
         case _:
             pass
 
     if settings["show_requests"].value:
         console.print(text.Text.from_markup("[[yellow]PAYLOAD[/]]") + text.Text(str(ready_payload)))
-
+    
     return ready_payload
 
 
@@ -617,13 +657,16 @@ def show_response(req):
 
 
 def send_request(payload, raw=False):
+    payload_arg = payload if "log" not in payload else "LOG FILE"
+    Event(f"SENDING PAYLOAD TO {server}", PAYLOAD=payload_arg)
     req = requests.post(server, json=payload, headers=headers, timeout=settings["request_waittime"].value)
     if raw and settings["show_requests"].value:
         console.print(text.Text.from_markup("[[yellow]PAYLOAD[/]]") + text.Text(str(payload)))
+    Event(f"RESPONSE FROM {server}", CODE=req.status_code, RESPONSE=req.text)
     show_response(req)
     if json.loads(req.text)["data"] == "easter egg":
         print(r"easter egg triggered lmao goodbye (this is a 0.1% chance)")
-        quit()
+        raise KeyboardInterrupt
     return req
 
 
@@ -636,10 +679,13 @@ def test_ping(mode="ready"):
             match ping:
                 case False:
                     console.print("[red]Server does not exist. Unable to connect[/]")
+                    Event("PINGED SERVER", STATUS="UNKNOWN HOST")
                 case None:
                     console.print("[yellow]server did not respond to ping. Unable to connect[/]")
+                    Event("PINGED SERVER", STATUS="NO RESPONSE")
                 case _:
                     console.print(f"[green]Server exists[/]")
+                    Event("PINGED SERVER", STATUS="EXISTS")
         else:
             req = send_request({"action": "ping"}, raw=True)
             last_ping = time.time()
@@ -648,19 +694,26 @@ def test_ping(mode="ready"):
                 case 200:
                     console.print(f"[green]Server {settings['module_server'].value} is online[/] (latency: {int(req.elapsed.seconds * 500 + req.elapsed.microseconds / 2000)}ms)")
                     console.print(f"Message from server: {json.loads(req.text)['data']}")
+                    Event("PINGED SERVER", STATUS="ONLINE")
                     return True
                 case 523:
                     console.print(f"[red]Server {settings['module_server'].value} is offline[/]")
+                    Event("PINGED SERVER", STATUS="OFFLINE")
                 case 504:
-                    console.print("[red]Gateway Timeout (504). Server is offline[/]") 
+                    console.print("[red]Gateway Timeout (504). Server is offline[/]")
+                    Event("PINGED SERVER", STATUS="TIMEOUT")
                 case 500:
                     console.print("[yellow]Server is updating (500). Server is offline[/]")
+                    Event("PINGED SERVER", STATUS="UPDATING")
                 case _:
                     console.print(f"[red]Unknown error: {req.status_code}[/]")
+                    Event("PINGED SERVER", STATUS=req.status_code)
     except json.decoder.JSONDecodeError:
         console.print("[red]Server responded with bad JSON, and is likely down.[/]")
+        Event("PINGED SERVER", STATUS="BAD JSON")
     except Exception as e:
-        console.print(f"[red]Could not connect to the server for this reason: {e} [/]")    
+        console.print(f"[red]Could not connect to the server for this reason: {e} [/]") 
+        Event("PINGED SERVER", STATUS="FAILED", REASON={e})   
     return False
 
 
@@ -676,7 +729,7 @@ def get_session():
             console.print(f"Invalid password; unable to generate session. If the [yellow]server_pw[/] value is set, it might be set to the wrong password. ")
         return
     session = data
-
+    Event("GENERATED SESSION")
     return session
 
 
@@ -684,6 +737,7 @@ def reconnect():
     if last_ping + settings["reconnect_timeout"].value < time.time():
         console.print("[red]Server is offline. Unable to perform action.[/]")
     else:
+        Event("RECONNECT ATTEMPT")
         console.print("[red]Server is offline.[/][yellow] Attempting to reconnect...[/]")
         online = test_ping()
         if online:
@@ -732,6 +786,7 @@ def server_module_select():
     if selected_modules == "\0":
         return
 
+    Event(f"REQUESTING MODULES FROM {server}", MODULES=[m.filename for m in selected_modules])
     payload = format_payload("install", modules=selected_modules)
     mod_req = send_request(payload)
     mod_resp = json.loads(mod_req.text)["data"]
@@ -756,10 +811,13 @@ def server_module_select():
         try:
             with open(f"modules/{filename}", "w") as m:
                 m.write(data)
+                Event(f"DOWNLOADED {filename}", STATUS="OK")
         except PermissionError:
             console.print(f"[red]Unable to install {name} because permission was denied. Make sure that this folder is not read-only. [/]")
+            Event(f"DOWNLOADED {filename}", STATUS=e)
         except Exception as e:
             console.print(f"[red]Unable to install {name} because of {e}[/]")
+            Event(f"DOWNLOADED {filename}", STATUS=e)
 
 
 @server_required
@@ -770,8 +828,10 @@ def upload_module():
     req = send_request(payload)
     if json.loads(req.text)["success"]:
         console.print("[green]Module uploaded successfully.[/]")
+        Event("UPLOADED MODULE", STATUS="OK")
     else:
         console.print("[red]Module upload failed[/]")
+        Event("UPLOADED MODULE", STATUS="FAILED")
 
 @server_required
 def update_module(module=""):
@@ -783,7 +843,8 @@ def update_module(module=""):
     filename = f'modules/{module.filename}'
     # make backup
     shutil.copyfile(filename, f'{filename}.bak')
-
+    Event("CREATED BACKUP", FILE=filename)
+    
     req = send_request(format_payload("version", [module]))
     if json.loads(req.text)["success"] == 1:
         version = int(json.loads(req.text)["data"][0])
@@ -797,16 +858,22 @@ def update_module(module=""):
             with open(filename, "w") as m:
                 m.write(mod[1])    
             console.print(f"[green]Updated {module.get_str()}[/]")
+            Event("UPDATED MODULE", STATUS="OK")
         else:
             console.print(f"[green]{module.get_str()} is already up to date.[/]")
+            Event("UPDATED MODULE", STATUS="ALREADY UPDATED")
     else:
         match json.loads(req.text)["data"]:
             case "no mod":
                 console.print(f"[red]Unable to update {module.get_str()} because it is not on the server.[/]")
+                Event("UPDATED MODULE", STATUS="NOT ON SERVER")
             case _:
                 console.print(f"[red]Unable to update {module.get_str()}[/]")
+                Event("UPDATED MODULE", STATUS="FAILED")
         shutil.copyfile(f'{filename}.bak', filename)
+        Event("REVERT TO BACKUP", FILE=filename)
 
+    Event("DELETED BACKUP", FILE=filename)
     os.remove(f'{filename}.bak')
             
 
@@ -827,9 +894,11 @@ def send_feedback():
         req = json.loads(send_request(format_payload("feedback", feedback=feedback)).text)
         if req["success"] == 1:
             console.print("[green]Thanks for your feedback :)[/]")
+            Event("SENT FEEDBACK", STATUS="OK", FEEDBACK=feedback)
             return
     except Exception as e:
         console.print(f"[red]error: {e}[/]")
+        Event("SENT FEEDBACK", STATUS="FAILED", REASON=e)
     # print this if bad params or crash 
     console.print("[red]Unable to send feedback :([/]")
 
@@ -851,15 +920,19 @@ def update_self():
         # get file
         if req.status_code != 200:
             console.print(f"[red]Could not download {file}.[/]")
+            Event("FILE DOWNLOAD", FILE=file, STATUS="FAILED")
             return
         console.print(f"[green]Successfully downloaded {file}... [/]", end="")
+        Event("FILE DOWNLOAD", FILE=file, STATUS="OK")
         # write to file
         try:
             open(file, "w").write(req.text)
             console.print(f"[green]Successfully updated {file} :)[/]")
+            Event("FILE WRITE", FILE=file, STATUS="OK")
         except Exception as e:
             console.print(f"[red]Could not write to {file} because {e}[/]\n[yellow]Reverting to old copy of {file}...[/]")
             shutil.copyfile(f'{file}.bak', file)
+            Event("FILE WRITE", FILE=file, STATUS="FAILED", REASON=e)
         os.remove(f'{file}.bak')
 
 
@@ -902,10 +975,13 @@ def action_controller(action: str):
             console.print(tutorial_str)
         case "Send feedback":
             send_feedback()
+        case "Restart":
+            restart()
         case "Exit":
             print("Exiting...")
+            send_request(format_payload("log"))
             send_request(format_payload("exit")) if session else 0
-            exit(0)
+            raise KeyboardInterrupt
 
 
 def preload():
@@ -923,9 +999,11 @@ def preload():
             # load settings
             update_settings()
         console.print("[green]Loaded settings successfully[/]")
-    except:
-        console.print("[red]FATAL: Could not load settings\nExiting...[/]")
-        quit()
+        Event("LOADED SETTINGS", STATUS="OK")
+    except Exception as e:
+        console.print("[red]FATAL: Could not load settings[/]")
+        Event("LOADED SETTINGS", STATUS="FAILED", REASON=e)
+        raise KeyboardInterrupt
 
     with console.status("Testing server connection...", spinner="earth"):
         # ping server and check connection
@@ -942,31 +1020,39 @@ def preload():
             updating = len(installed_modules)
             with console.status(f"\nUpdating {updating} module{'s' if updating != 1 else ''}...", spinner="bouncingBar"):
                 update_all(status_text=True)
+            Event("MODULE AUTOUPDATE", STATUS="OK")
     except Exception as e:
         console.print(f"[red]Could not update modules.[/]")
+        Event("MODULE AUTOUPDATE", STATUS="FAILED", REASON=e)
     
-    print()
     try:
         if settings["autoupdate_script"].value:
+            print()
             with console.status(f"\nUpdating the script...", spinner="bouncingBar"):
                 update_self()
+                Event("UPDATED SCRIPT", STATUS="OK")
                 restart(updating=True)
     except Exception as e:
         console.print(f"[red]Could not update the script ({e})[/]")
+        Event("UPDATED SCRIPT", STATUS="FAILED", REASON=e)
     console.print(tutorial_str)
 
 
 def main():
     preload()
+    Event("PRELOAD COMPLETE")
     while True:
         action_controller(action_select())
         update_settings()
 
-# this is just bloatware atp
 try:
     if __name__ == "__main__":
         main()
 except KeyboardInterrupt:
-    print("\nExiting...")
+    if not no_exit_text:
+        print("\nExiting...")  
+    Event("END PROGRAM", STATUS="OK")
+    quit()
 except Exception as e:
     print(f"Script crashed ({e})\nExiting...")
+    Event("END PROGRAM", STATUS="CRASH", REASON=e)
