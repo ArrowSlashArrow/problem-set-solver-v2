@@ -120,9 +120,9 @@ class Fraction:
         self.simplify()
 
     def simplify(self):
-        g = math.gcd(self.num, self.den)
-        self.num = self.num // g
-        self.den = self.den // g
+        greatest_factor = math.gcd(self.num, self.den)
+        self.num = self.num // greatest_factor
+        self.den = self.den // greatest_factor
 
     def __add__(self, other):
         a, b, c, d = self.num, self.den, other.num, other.den
@@ -137,19 +137,20 @@ class Fraction:
         if type(other) is int:
             return Fraction(self.num * other, self.den)
         if type(other) is float:
-            pass  # todo: float -> fraction, then multiply
+            return Fraction(other) * self
 
         if type(other) is Fraction:
             return Fraction(self.num * other.num, self.den * other.den)
         else:  # if not multiplying by a number,
             return
 
-    # floordiv doesn't make sense here
+    
     def __truediv__(self, other):
         if type(other) is int:
             return Fraction(self.num, self.den * other)
         if type(other) is float:
-            pass  # todo: float -> fraction, then divide
+            divisor = Fraction(other)
+            return Fraction(self.num * divisor.den, self.den * divisor.num)
 
         if type(other) is Fraction:
             return Fraction(self.num * other.den, self.den * other.num)

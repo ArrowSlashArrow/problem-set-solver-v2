@@ -58,5 +58,10 @@
         "positive number",
         16,
         "The amount of seconds the script waits before marking a request as 'timed out'"
+    ],
+    "striped_rows": [
+        "boolean",
+        true,
+        "Whether the rows are in alternating colours or not. Helps to visually seperate them."
     ]
 }
