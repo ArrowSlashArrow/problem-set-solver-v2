@@ -6,8 +6,10 @@ __pycache__/
 # C extensions
 *.so
 
-# modules and others
-log_temp
+# program-specific files
+admin_enc
+admin.py
+.log
 modules/
 
 # Distribution / packaging

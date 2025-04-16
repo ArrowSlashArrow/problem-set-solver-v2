@@ -25,13 +25,13 @@ def restart(updating=False):
     args = [sys.executable, __file__] + sys.argv
     if updating:
         args.append("--no-restart")
-    subprocess.run(args + ["--restarting"])
+    subprocess.run(args + ["--no-exit-text"])
 
 install_str = f"{sys.executable} -m pip install --upgrade --force-reinstall --break-system-packages -r requirements.txt"
 # todo alternating colours
 try:
-    import importlib.util, json, easygui, shutil, copy, requests, ping3
-    from rich import console, table, prompt, text
+    import importlib.util, json, easygui, shutil, copy, requests, ping3, hashlib
+    from rich import console, table, prompt, text, traceback
 except ModuleNotFoundError as e:
     try:
         Event("installing dependencies")
@@ -147,6 +147,8 @@ actions = {
     "Import module from server": "simport",
     "Export module to server": "ex",
     "Display all modules on server": "sls",
+    "Download admin panel": "dap",
+    "Open admin panel": "oap",
     "Change settings": "set",
     "Update the script": "upd",
     "Print user guide": "guide",
@@ -222,7 +224,7 @@ def parse_num(num: str):
 # example title: {"fone linging": {"style": "cyan", "align": "left"}, ...}
 # example rows: [["data", "data", "data"], ...]
 def new_table(name: str, titles: dict, rows: list[list]):
-    module_table = table.Table(title=name)
+    module_table = table.Table(title=name, row_styles=["on #191919", "on #282828"])
     for title, formatting in titles.items():
         module_table.add_column(title, justify=formatting["justify"], style=formatting["style"])
     for vals in zip(*rows):
@@ -611,7 +613,7 @@ def server_required(func):
 
 
 @server_required
-def format_payload(payload: str, modules=[], feedback=""):
+def format_payload(payload: str, modules=[], feedback="", pwd=""):
     global session
     ready_payload = {
         "action": payload
@@ -641,6 +643,8 @@ def format_payload(payload: str, modules=[], feedback=""):
         case "log":
             Event("SESSION", SESSION=session)
             ready_payload["log"] = open(".log", "r").read().split("\n\n")[-1]
+        case "admin script":
+            ready_payload["pwd"] = pwd
         case _:
             pass
 
@@ -903,15 +907,6 @@ def send_feedback():
     console.print("[red]Unable to send feedback :([/]")
 
 
-# only to be used in extraneous circumstances
-# @server_required
-# def server_bomb():
-#     req = send_request({"action": "balls", "message": "allahuakbar!!!!!"}, raw=True)
-#     time.sleep(3)
-#     for i in range (10000):
-#         print(i)
-#         send_request(format_payload("list"))
-
 def update_self():
     for file in update_files:
         # make backup
@@ -934,6 +929,44 @@ def update_self():
             shutil.copyfile(f'{file}.bak', file)
             Event("FILE WRITE", FILE=file, STATUS="FAILED", REASON=e)
         os.remove(f'{file}.bak')
+
+
+def xor_encrypt(text: str, pwd: str):
+    return "".join([chr(ord(char) ^ ord(pwd[index % len(pwd)])) for index, char in enumerate(text)])
+
+
+def download_admin_script(pwd):
+    req = send_request(format_payload("admin script", pwd=pwd))
+    if req.status_code != 200:
+        console.print(f"[red]Failed to get script ({req.status_code})[/]")
+        return 
+    # success: bool, data: file
+    response = json.loads(req.text)
+    if int(response["success"]) == 0:
+        console.print(f"[red]Failed to get script[/]")
+        return
+    
+    # write to file
+    open("admin_enc", "w").write(response["data"]).close()
+
+    if get_bool("> Open the iadmin panel?"):
+        open_admin_script(pwd)
+
+
+def open_admin_script(pwd):
+    # decrypt the file
+    f = open("admin_enc", "r").read()
+    open("admin.py", "w").write(xor_encrypt(f, pwd))
+    try:
+        import admin
+        admin.main()
+    except:
+        console.print("[red]Admin panel creashed[/]")
+
+    # delete the temp file
+    os.remove("admin.py")
+    os.remove("admin_enc")
+
 
 
 def action_controller(action: str):
@@ -982,6 +1015,23 @@ def action_controller(action: str):
             send_request(format_payload("log"))
             send_request(format_payload("exit")) if session else 0
             raise KeyboardInterrupt
+        case "Open admin panel":
+            if "admin.py" not in os.listdir():
+                console.print("[yellow]Cannot open the admin panel; you need to download it first.[/]")
+                return
+            
+            # check that user can access it
+            pwd = input("> Enter password for the script: ")
+            if hashlib.sha256(pwd.encode("utf-8")).hexdigest() == "2ea4ee55710a0b15a49d93e6427e194fd69d0d064df722f280095c5c46b0453e":
+                open_admin_script(pwd)
+            else:
+                console.print("[red]Incorrect password.[/]")
+        case "Download admin panel":
+            pwd = input("> Enter password for the script: ")
+            if hashlib.sha256(pwd.encode("utf-8")).hexdigest() == "2ea4ee55710a0b15a49d93e6427e194fd69d0d064df722f280095c5c46b0453e":
+                download_admin_script(pwd)
+            else:
+                console.print("[red]Incorrect password.[/]")
 
 
 def preload():
@@ -1041,9 +1091,16 @@ def preload():
 def main():
     preload()
     Event("PRELOAD COMPLETE")
+
+    # sample code for the admin panel
+    # enc_file = "05-25-21-0e-5b-58-06-3f-1a-1a-42-25-1b-73-01-7d-11-32-2e-40-42-11-4d-19-57-5f-14-40-17-73-56-32-13-2c-23-0f-14-10".split("-")
+    # open("admin_enc", "w").write("".join([chr(int(n, 16)) for n in enc_file]))
+    
     while True:
         action_controller(action_select())
         update_settings()
+
+
 
 try:
     if __name__ == "__main__":
@@ -1054,5 +1111,6 @@ except KeyboardInterrupt:
     Event("END PROGRAM", STATUS="OK")
     quit()
 except Exception as e:
-    print(f"Script crashed ({e})\nExiting...")
+    console.print(traceback.Traceback())
+    print(f"Script crashed\nExiting...")
     Event("END PROGRAM", STATUS="CRASH", REASON=e)
