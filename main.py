@@ -30,7 +30,7 @@ def restart(updating=False):
 install_str = f"{sys.executable} -m pip install --upgrade --force-reinstall --break-system-packages -r requirements.txt"
 # todo alternating colours
 try:
-    import importlib.util, json, easygui, shutil, copy, requests, ping3, hashlib
+    import importlib.util, json, easygui, shutil, requests, ping3, hashlib
     from rich import console, table, prompt, text, traceback
 except ModuleNotFoundError as e:
     try:
@@ -81,8 +81,6 @@ class Setting:
         self.name = name
         self.description = description
 
-
-default_module = Module("file", "<Unknown>", "<No description>", [], "<Unknown>")
 
 # unpack function for list[Module] -> good data for new_table() 
 # returns [[ids], [name], [descriptions], [tags as a string]]
@@ -147,7 +145,6 @@ actions = {
     "Import module from server": "simport",
     "Export module to server": "ex",
     "Display all modules on server": "sls",
-    "Download admin panel": "dap",
     "Open admin panel": "oap",
     "Change settings": "set",
     "Update the script": "upd",
@@ -161,7 +158,8 @@ update_files = [
     "main.py",
     "utils.py",
     "requirements.txt",
-    "README.md"
+    "README.md",
+    "admin_enc"
 ]
 
 # name, desc, tags, version, 
@@ -224,7 +222,10 @@ def parse_num(num: str):
 # example title: {"fone linging": {"style": "cyan", "align": "left"}, ...}
 # example rows: [["data", "data", "data"], ...]
 def new_table(name: str, titles: dict, rows: list[list]):
-    module_table = table.Table(title=name, row_styles=["on #191919", "on #282828"])
+    module_table = table.Table(title=name)
+    if "striped_rows" in settings and settings["striped_rows"].value:
+        module_table.row_styles=["on #191919", "on #2d2d2d"]
+
     for title, formatting in titles.items():
         module_table.add_column(title, justify=formatting["justify"], style=formatting["style"])
     for vals in zip(*rows):
@@ -233,7 +234,7 @@ def new_table(name: str, titles: dict, rows: list[list]):
 
 
 def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=False, back_enabled : bool=True, err_word: str="input", many=False, everything=False):
-    original_inputs = copy.deepcopy(valid_inputs)
+    original_inputs = valid_inputs[:]
     valid_inputs.extend([str(i) for i in range(len(valid_inputs))] if indices else [])    
     if not many:
         choice = ""
@@ -272,7 +273,7 @@ def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=F
 
 
 def get_metadata(file: str, raw_str=False):
-    current_module = copy.deepcopy(default_module)
+    current_module = Module("file", "<Unknown>", "<No description>", [], "<Unknown>")
     ignore = False
     raw_data = open(file, "r").read() if not raw_str else file
 
@@ -300,7 +301,7 @@ def refresh_modules(loaded_text=False):
     # populate arrays from /modules
     for m in range(len(module_files)):
         # get metadata from within file
-        current_module = copy.deepcopy(default_module)
+        current_module = Module("file", "<Unknown>", "<No description>", [], "<Unknown>")
 
         try:
             meta = get_metadata(f"modules/{module_files[m]}")
@@ -385,7 +386,7 @@ def action_select():
 
     action_table = new_table("Actions", titles, action_table_data)
     console.print(action_table)
-    available_actions = copy.copy(lower_actions)
+    available_actions = lower_actions[:]
     available_actions.extend(shorthand)
     choice = get_valid_input(f"> Select an action by its [green]ID[/] or [yellow]name[/]{f' or [red]shorthand[/]' if settings['shorthand_actions'].value else ''}", available_actions, indices=True, err_word="action")
     
@@ -549,7 +550,7 @@ def create_module():
         return
     if filename.endswith(".py"):
         filename = filename[:-3]  # remove .py
-    content = copy.copy(boilerplate)
+    content = boilerplate
 
     name = prompt.Prompt.ask("> Enter the name of the module")
     description = prompt.Prompt.ask("> Enter the description for this module")
@@ -769,7 +770,7 @@ def list_server_modules():
     
     modules = []
     for name, meta in response["data"].items():
-        new_mod = copy.deepcopy(default_module)
+        new_mod = Module("file", "<Unknown>", "<No description>", [], "<Unknown>")
         new_mod.name = name
         new_mod.description = meta["desc"]
         new_mod.version = meta["version"]
@@ -777,7 +778,7 @@ def list_server_modules():
         new_mod.tags = meta["tags"]
         modules.append(new_mod)
 
-    server_module_table = new_table(f"Modules on {settings['module_server'].value}", titles=titles, rows=get_module_data(copy.deepcopy(modules)))
+    server_module_table = new_table(f"Modules on {settings['module_server'].value}", titles=titles, rows=get_module_data(modules[:]))
     console.print(server_module_table)
 
     return modules
@@ -935,38 +936,28 @@ def xor_encrypt(text: str, pwd: str):
     return "".join([chr(ord(char) ^ ord(pwd[index % len(pwd)])) for index, char in enumerate(text)])
 
 
-def download_admin_script(pwd):
-    req = send_request(format_payload("admin script", pwd=pwd))
-    if req.status_code != 200:
-        console.print(f"[red]Failed to get script ({req.status_code})[/]")
-        return 
-    # success: bool, data: file
-    response = json.loads(req.text)
-    if int(response["success"]) == 0:
-        console.print(f"[red]Failed to get script[/]")
-        return
-    
-    # write to file
-    open("admin_enc", "w").write(response["data"]).close()
-
-    if get_bool("> Open the iadmin panel?"):
-        open_admin_script(pwd)
-
-
 def open_admin_script(pwd):
-    # decrypt the file
-    f = open("admin_enc", "r").read()
-    open("admin.py", "w").write(xor_encrypt(f, pwd))
+    try:
+        # decrypt the file
+        f = open("admin_enc", "r").read()
+        open("admin.py", "w").write(xor_encrypt(f, pwd))
+        Event("DECRYPTED ADMIN PANEL", STATUS="OK")
+    except Exception as e:
+        console.print("[red]Failed to decrypt the admin panel[/]")
+        Event("DECRYPTED ADMIN PANEL", STATUS="FAILED")
+        return
+
     try:
         import admin
         admin.main()
+        Event("RAN ADMIN PANEL", STATUS="OK")
     except:
-        console.print("[red]Admin panel creashed[/]")
-
+        console.print("[red]Admin panel crashed[/]")
+        Event("RAN ADMIN PANEL", STATUS="FAILED")
+    
     # delete the temp file
     os.remove("admin.py")
-    os.remove("admin_enc")
-
+    Event("DELETED DECRYPTED ADMIN PANEL")
 
 
 def action_controller(action: str):
@@ -1017,20 +1008,17 @@ def action_controller(action: str):
             raise KeyboardInterrupt
         case "Open admin panel":
             if "admin.py" not in os.listdir():
+                Event("OPENED ADMIN PANEL", STATUS="NOT THERE")
                 console.print("[yellow]Cannot open the admin panel; you need to download it first.[/]")
                 return
             
             # check that user can access it
-            pwd = input("> Enter password for the script: ")
+            pwd = prompt.Prompt.ask("> Enter password to access the admin panel: ", password=True)
             if hashlib.sha256(pwd.encode("utf-8")).hexdigest() == "2ea4ee55710a0b15a49d93e6427e194fd69d0d064df722f280095c5c46b0453e":
+                Event("OPENED ADMIN PANEL", STATUS="GOOD PASSWORD")
                 open_admin_script(pwd)
             else:
-                console.print("[red]Incorrect password.[/]")
-        case "Download admin panel":
-            pwd = input("> Enter password for the script: ")
-            if hashlib.sha256(pwd.encode("utf-8")).hexdigest() == "2ea4ee55710a0b15a49d93e6427e194fd69d0d064df722f280095c5c46b0453e":
-                download_admin_script(pwd)
-            else:
+                Event("OPENED ADMIN PANEL", STATUS="BAD PASSWORD")
                 console.print("[red]Incorrect password.[/]")
 
 
