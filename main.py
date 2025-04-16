@@ -25,7 +25,7 @@ def restart(updating=False):
     args = [sys.executable, __file__] + sys.argv
     if updating:
         args.append("--no-restart")
-    subprocess.run(args + ["--no-exit-text"])
+    subprocess.run(args + ["--no-exit-text", "--restarting"])
 
 install_str = f"{sys.executable} -m pip install --upgrade --force-reinstall --break-system-packages -r requirements.txt"
 # todo alternating colours
@@ -102,8 +102,16 @@ def get_module_data(modules: list[Module]):
 console = console.Console()
 modules = []
 
+info = {
+    "authors": ["Authors: ", "</> (arrow) and bitfeller"],
+    "version": ["Version: ", "1.1.1"],
+    "last_updated": ["Last updated on: ", "2025/04/16"]
+}
+
+about_txt = "\n".join(f" - {value[0]}{value[1]}" for value in info.values())
+
 # user guide
-tutorial_str = text.Text.from_markup("""\n-------------------------------[ [green]BEGIN TUTORIAL[/] ]------------------------------- 
+tutorial_str = text.Text.from_markup(f"""\n-------------------------------[ [green]BEGIN TUTORIAL[/] ]------------------------------- 
 Welcome to the problem set solver tutorial!
 
 [bold]## USAGE[/]
@@ -129,9 +137,11 @@ To create a module, you must know how to write basic code in python, and if you 
 Your modules should not contain any dependencies or import other than utils.
 If you don't know how to write code, you can contact me to make it at @arrowslasharrow on Discord.
 
-Made by </> (arrow) and bitfeller on 2025/03/19, last updated on v1.0.1 at 2025/04/09
+Made by {info['authors'][0]} on 2025/03/19, last updated on v{info['version'][0]} at {info['last_updated'][0]}
 --------------------------------[ [red]END TUTORIAL[/] ]--------------------------------
 """)
+
+about_str = text.Text.from_markup(f"""\nAbout Problem Set Solver:{about_txt}""")
 
 # shorthand
 actions = {
@@ -150,6 +160,7 @@ actions = {
     "Update the script": "upd",
     "Print user guide": "guide",
     "Send feedback": "sfb",
+    "About": "about",
     "Restart": "r",
     "Exit": "x"
 }
@@ -420,7 +431,8 @@ def load_module(module: Module):
             Event("END MODULE", STATUS="OK")
         except Exception as e:
             Event("END MODULE", STATUS="CRASH")
-            console.print(f"[red]{module.name} crashed :( Error: {e}[/]")
+            console.print(traceback.Traceback())
+            console.print(f"[red]{module.name} crashed :([/]")
     else:
         Event("END MODULE", STATUS="NO SOLVER")
         console.print(f"\n[yellow]{module.name} does not have a solver() function. Unable to run module.[/]\n")
@@ -1020,6 +1032,9 @@ def action_controller(action: str):
             else:
                 Event("OPENED ADMIN PANEL", STATUS="BAD PASSWORD")
                 console.print("[red]Incorrect password.[/]")
+
+        case "About":
+            print("Made by </> (arrow) and bitfeller on 2025/03/19, last updated on v1.1.1 at 2025/04/16")
 
 
 def preload():
