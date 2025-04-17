@@ -90,13 +90,15 @@ def get_module_data(modules: list[Module]):
     descriptions = []
     tags = [] 
     versions = []
+    filenames = []
     for m in modules:  # formats everything properly so rich can display it
         ids.append(str(len(ids)))
         names.append(m.name)
         descriptions.append(m.description)
         tags.append(", ".join(m.tags))
         versions.append(str(m.version))
-    return [ids, names, descriptions, tags, versions]
+        filenames.append(m.filename)
+    return [ids, names, descriptions, tags, versions, filenames]
 
 # intialize rich console and module table arrays
 console = console.Console()
@@ -192,7 +194,8 @@ titles = {  # constant
     "Module Name": {"style": "green", "justify": "right"},
     "Module Description": {"style": "yellow", "justify": "left"},
     "Tags": {"style": "red", "justify": "left"},
-    "Version": {"style": "purple", "justify": "right"}
+    "Version": {"style": "purple", "justify": "right"},
+    "Filename": {"style": "grey62", "justify": "right"}
 }
 
 # settings
@@ -979,7 +982,11 @@ def action_controller(action: str):
             if not module:
                 return
             console.print(f"\n-----------[ [green]Start of {module.name} [/]]-----------")
-            load_module(module)
+            try:
+                load_module(module)
+            except KeyboardInterrupt:
+                print()
+                Event("END MODULE", STATUS="OK")
             console.print(f"------------[ [red]End of {module.name} [/]]------------\n")
         case "List all modules":
             update_module_table()
@@ -1022,7 +1029,7 @@ def action_controller(action: str):
         case "Open admin panel":
             # check that user can access it
             pwd = prompt.Prompt.ask("> Enter password to access the admin panel", password=True)
-            if hashlib.sha256(pwd.encode("utf-8")).hexdigest() == "2ea4ee55710a0b15a49d93e6427e194fd69d0d064df722f280095c5c46b0453e":
+            if hashlib.sha256(pwd.encode("utf-8")).hexdigest() == "878248de86cb7e6492aae17cddff64c393ca018c872ced068e846737e7ec7448":
                 Event("OPENED ADMIN PANEL", STATUS="GOOD PASSWORD")
                 open_admin_script(pwd)
             else:

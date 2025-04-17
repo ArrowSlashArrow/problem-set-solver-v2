@@ -15,10 +15,13 @@ def parse_num(num: str):
             return num
 
 
-def get_valid_fraction(msg):
+def get_valid_fraction(msg="", sentinel="exit"):
     while True:
         try:
-            return Fraction(input(msg))
+            inp = input(msg)
+            if inp == sentinel:
+                return "exit"
+            return Fraction(inp)
         except Exception:
             print("Invalid input. Please try again")
 
@@ -114,12 +117,15 @@ class Fraction:
             self.num = abs(self.num)
             self.den = abs(self.den)
         else:
+            if self.den == 0:
+                raise ValueError("A Fraction cannot have a denomerator of 0.")
             self.num = 0
-            self.den = 0
 
         self.simplify()
 
     def simplify(self):
+        if self.den == 0:
+            raise ValueError("A Fraction cannot have a denomenator of 0")
         greatest_factor = math.gcd(self.num, self.den)
         self.num = self.num // greatest_factor
         self.den = self.den // greatest_factor
