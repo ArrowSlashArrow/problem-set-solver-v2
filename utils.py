@@ -70,6 +70,7 @@ class Fraction:
                 self.num = frac.num
                 self.den = frac.den
             else:
+                # todo: shit doesnt parse a negative correctly
                 if num.count(".") == 1 and num.count("/") == 0:  # float string
                     # slice the string into the respective chunks (whole.fraction)
                     float_parts = num.split(".")
@@ -106,12 +107,12 @@ class Fraction:
 
                         # these are some final if statements to format the parts
                         # could be cleaned up with refactoring
+                        if len(parts) == 3:
+                            if parts[1].endswith("/") or parts[2].startswith('/'):
+                                parts = [parts[0], "".join(parts[1:])]
                         if len(parts) == 2 and parts[1].startswith("/") or parts[0].endswith('/'):
                             the_part = "".join(parts)
                             parts = [the_part]
-                        elif len(parts) == 3:
-                            if parts[1].endswith("/") or parts[2].startswith('/'):
-                                parts = [parts[0], "".join(parts[1:])]
                         
                         # parts should be ['a/b'] or ['a', 'b/c']
                         if len(parts) == 2:  # mixed fraction (a b/c)
@@ -124,7 +125,7 @@ class Fraction:
                             self.num = frac.num
                             self.den = frac.den
                         elif len(parts) == 1:  # improper fraction (a/b)
-                            frac = Fraction(parts[0].split("/"))
+                            frac = Fraction(*parts[0].split("/"))
                             self.num = frac.num
                             self.den = frac.den
         elif type(num) is list:
