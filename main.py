@@ -238,7 +238,7 @@ def parse_num(num: str):
 def new_table(name: str, titles: dict, rows: list[list]):
     module_table = table.Table(title=name)
     if "striped_rows" in settings and settings["striped_rows"].value:
-        module_table.row_styles=["on #191919", "on #2d2d2d"]
+        module_table.row_styles=["on grey11", "on grey15"]
 
     for title, formatting in titles.items():
         module_table.add_column(title, justify=formatting["justify"], style=formatting["style"])
