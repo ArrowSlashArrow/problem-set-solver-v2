@@ -56,7 +56,7 @@
     ],
     "request_waittime": [
         "positive number",
-        16,
+        5,
         "The amount of seconds the script waits before marking a request as 'timed out'"
     ],
     "striped_rows": [

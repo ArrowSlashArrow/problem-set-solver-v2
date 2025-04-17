@@ -950,7 +950,8 @@ def xor_encrypt(text: str, pwd: str):
 
 def open_admin_script(pwd):
     if "admin_enc" not in os.listdir():
-        console.print("[yellow]you cannod doo dat saar. you need do redownlod de admin_enc fial.[/]")
+        console.print("[yellow]There is no `admin_enc` file in the directory. Please redownload it from the repo.[/]")
+        return
     try:
         # decrypt the file
         f = open("admin_enc", "r").read()
@@ -1097,7 +1098,7 @@ def main():
     Event("PRELOAD COMPLETE")
 
     # sample code for the admin panel
-    # enc_file = "05-25-21-0e-5b-58-06-3f-1a-1a-42-25-1b-73-01-7d-11-32-2e-40-42-11-4d-19-57-5f-14-40-17-73-56-32-13-2c-23-0f-14-10".split("-")
+    # enc_file = "06-0a-14-44-08-13-05-07-46-4c-1a-79-50-59-57-41-02-17-0b-01-06-4c-47-1a-09-05-02-0a-0c-53-07-16-05-0d-16-44-40-46".split("-")
     # open("admin_enc", "w").write("".join([chr(int(n, 16)) for n in enc_file]))
     
     while True:
@@ -1111,7 +1112,7 @@ try:
         main()
 except KeyboardInterrupt:
     if not no_exit_text:
-        print("\nExiting...")  
+        print("\nThanks for using Problem Set Solver by </> (arrow) and bitfeller!\nExiting...")  
     Event("END PROGRAM", STATUS="OK")
     quit()
 except Exception as e:

@@ -17,16 +17,19 @@ def parse_num(num: str):
 
 def get_valid_fraction(msg="", sentinel="exit"):
     while True:
-        try:
+        # try:
             inp = input(msg)
             if inp == sentinel:
                 return "exit"
             return Fraction(inp)
-        except Exception:
-            print("Invalid input. Please try again")
+        # except Exception:
+        #     print("Invalid input. Please try again")
 
 
 # do NOT touch this, you will fuck everything up
+# clamps the input angle to within the acceptable range
+# angle => (0, 360) if degrees
+# angle => (0, 2PI) if radians
 def clamp_angle(angle, radians=True):
     return ((1 - 2 * int(abs(angle) != angle)) * (abs(angle) % [360, 2 * PI][int(radians)]) + 2 * [360, PI][int(radians)]) % [360, PI][int(radians)]
 
@@ -46,12 +49,16 @@ def signstr(num: float | int):
 # todo: clean up this class (never nester technique)
 class Fraction:
     def __init__(self, num, den=None):
+        if den and parse_num(den) == 0:
+            raise ValueError("you cant put 0 in the denomerator buddy")
         if type(num) is int:
             self.num = num
             self.den = den if den else 1
         elif type(num) is float:
             if den:
-                raise ValueError(f"Unable to create a Fraction from two floats; only one is required.")
+                frac = Fraction(num) / Fraction(den)
+                self.num = frac.num
+                self.den = frac.den
 
             whole, decimal = math.floor(num), num % 1
             factor = 10**len(str(decimal)[2:])
@@ -63,41 +70,63 @@ class Fraction:
                 self.num = frac.num
                 self.den = frac.den
             else:
-                frac = parse_num(num.lstrip().rstrip())
-                if type(frac) is not str:
-                    new_frac = Fraction(frac)
-                    self.num = new_frac.num
-                    self.den = new_frac.den
-                else:  # assume it is a mixed number
-                    extra_chars = frac.strip("0123456789/ ")
-                    if len(extra_chars) > 0 or frac.count("/") > 1:  # if there are any extra characters, it is not a valid fraction
-                        raise ValueError(f"Unable to create a Fraction from {frac}; it is not a valid fraction.")
+                if num.count(".") == 1 and num.count("/") == 0:  # float string
+                    # slice the string into the respective chunks (whole.fraction)
+                    float_parts = num.split(".")
+                    # determine the denomerator from the fraction digit count
+                    factor = 10**len(float_parts[1])
+                    # evaluate the whole amount (.fraction = 0.fraction)
+                    whole = 0 if len(float_parts[0]) == 0 else int(float_parts[0])
+                    # process the two parts accordingly 
+                    self.num = whole * factor + int(float_parts[1])
+                    self.den = factor
+                elif num.count(".") > 1 and num.count("/") == 0:
+                    raise ValueError(f"Cannot create a fraction from {num}")
+                else:
+                    frac = parse_num(num.lstrip().rstrip())
+                    if type(frac) is not str:
+                        new_frac = Fraction(frac)
+                        self.num = new_frac.num
+                        self.den = new_frac.den
+                    else:  # assume it is a mixed number
+                        extra_chars = frac.strip("0123456789/-. ")
+                        if len(extra_chars) > 0 or frac.count("/") > 1:  # if there are any extra characters, it is not a valid fraction
+                            raise ValueError(f"Unable to create a Fraction from {frac}; it is not a valid fraction.")
+                        
+                        # remove all empty strings
+                        parts = [p for p in frac.split(" ") if p != ""]
+                        if len(parts) > 1 and "/" in parts[1]:  # detect properly formatted fraction and skip
+                            pass
+                        elif "/" not in parts[0] and "/" not in parts[1]:
+                            if "/" not in parts[-1]:
+                                parts[1] = "".join(parts[1:])
+                                parts = parts[:2]
+                        else:
+                            parts = ["".join(parts)]
 
-                    # remove all empty strings
-                    parts = [p for p in frac.split(" ") if p != ""]
-                    if len(parts) > 1 and "/" in parts[1]:  # detect properly formatted fraction and skip
-                        pass
-                    elif "/" not in parts[0] and "/" not in parts[1]:
-                        if "/" not in parts[-1]:
-                            parts[1] = "".join(parts[1:])
-                            parts = parts[:2]
-                    else:
-                        parts = ["".join(parts)]
-                    
-                    # parts should be ['a/b'] or ['a', 'b/c']
-                    if len(parts) == 2:  # mixed fraction (a b/c)
-                        parts[1] = "".join(parts[1:])
-                        improper = [int(n) for n in parts[1].split("/")]
-                        denom = improper[1]
-                        frac = Fraction(
-                            int(parts[0]) * denom + improper[0], denom)
-                        self.num = frac.num
-                        self.den = frac.den
-                    elif len(parts) == 1:  # improper fraction (a/b)
-                    
-                        frac = Fraction(parts[0].split("/"))
-                        self.num = frac.num
-                        self.den = frac.den
+                        # these are some final if statements to format the parts
+                        # could be cleaned up with refactoring
+                        if len(parts) == 2 and parts[1].startswith("/") or parts[0].endswith('/'):
+                            the_part = "".join(parts)
+                            parts = [the_part]
+                        elif len(parts) == 3:
+                            if parts[1].endswith("/") or parts[2].startswith('/'):
+                                parts = [parts[0], "".join(parts[1:])]
+                        
+                        # parts should be ['a/b'] or ['a', 'b/c']
+                        if len(parts) == 2:  # mixed fraction (a b/c)
+                            improper = [int(n) for n in parts[1].split("/")]
+                            denom = improper[1]
+                            # properly accepts a negative mixed fraction (-a b/c is assumed to be all negative)
+                            if abs(int(parts[0])) != int(parts[0]):
+                                improper[0] *= -1
+                            frac = Fraction(int(parts[0]) * denom + improper[0], denom)
+                            self.num = frac.num
+                            self.den = frac.den
+                        elif len(parts) == 1:  # improper fraction (a/b)
+                            frac = Fraction(parts[0].split("/"))
+                            self.num = frac.num
+                            self.den = frac.den
         elif type(num) is list:
             if den:
                 raise ValueError(f"Unable to create a Fraction from two lists; only one is required.")
@@ -110,17 +139,15 @@ class Fraction:
         else:
             raise ValueError(f"Cannot create a Fraction from {num} and {den}")
 
-        if self.num * self.den < 0:
+        if (self.num < 0) ^ (self.den < 0):
             self.num = -abs(self.num)
             self.den = abs(self.den)
-        elif self.num * self.den > 0:
+        else:
             self.num = abs(self.num)
             self.den = abs(self.den)
-        else:
-            if self.den == 0:
-                raise ValueError("A Fraction cannot have a denomerator of 0.")
-            self.num = 0
 
+        if self.den == 0 and self.num != 0:
+            raise ValueError("A Fraction's denomerator cannot be zero.")
         self.simplify()
 
     def simplify(self):
