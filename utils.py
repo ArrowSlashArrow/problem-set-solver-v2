@@ -17,13 +17,13 @@ def parse_num(num: str):
 
 def get_valid_fraction(msg="", sentinel="exit"):
     while True:
-        # try:
+        try:
             inp = input(msg)
             if inp == sentinel:
                 return "exit"
             return Fraction(inp)
-        # except Exception:
-        #     print("Invalid input. Please try again")
+        except Exception:
+            print("Invalid input. Please try again")
 
 
 # do NOT touch this, you will fuck everything up
