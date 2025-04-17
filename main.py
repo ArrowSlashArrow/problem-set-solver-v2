@@ -30,7 +30,7 @@ def restart(updating=False):
 install_str = f"{sys.executable} -m pip install --upgrade --force-reinstall --break-system-packages -r requirements.txt"
 # todo alternating colours
 try:
-    import importlib.util, json, easygui, shutil, requests, ping3, hashlib
+    import importlib.util, json, easygui, shutil, requests, hashlib
     from rich import console, table, prompt, text, traceback
 except ModuleNotFoundError as e:
     try:
@@ -137,11 +137,11 @@ To create a module, you must know how to write basic code in python, and if you 
 Your modules should not contain any dependencies or import other than utils.
 If you don't know how to write code, you can contact me to make it at @arrowslasharrow on Discord.
 
-Made by {info['authors'][0]} on 2025/03/19, last updated on v{info['version'][0]} at {info['last_updated'][0]}
+Made by {info['authors'][1]} on 2025/03/19, last updated on v{info['version'][1]} at {info['last_updated'][1]}
 --------------------------------[ [red]END TUTORIAL[/] ]--------------------------------
 """)
 
-about_str = text.Text.from_markup(f"""\nAbout Problem Set Solver:{about_txt}""")
+about_str = text.Text.from_markup(f"""\nAbout Problem Set Solver:\n{about_txt}""")
 
 # shorthand
 actions = {
@@ -166,7 +166,7 @@ actions = {
 }
 
 update_files = [
-    "main.py",
+    # "main.py",
     "utils.py",
     "requirements.txt",
     "README.md",
@@ -439,7 +439,7 @@ def load_module(module: Module):
 
 
 def boolstr(s: str):
-    return s.lower() in ("true", "yes", "ye", "1", "yep", "yea", "yeah")
+    return 
 
 
 def format_settings(settings: list[Setting]):
@@ -478,7 +478,7 @@ def change_settings():
     # format input according to data type
     match settings[choice].type:
         case "boolean":
-            inp = boolstr(inp)
+            inp = inp.lower() in ("true", "yes", "ye", "1", "y", "yep", "yea", "yeah")
         case "positive number":
             parsed = parse_num(inp)
             if type(parsed) not in [float, int]:
@@ -688,43 +688,30 @@ def send_request(payload, raw=False):
 
 
 # returns true if server is online
-def test_ping(mode="ready"):
+def test_ping():
     global last_ping
     try:
-        if mode == "exists":
-            ping = ping3.ping(settings["module_server"].value)
-            match ping:
-                case False:
-                    console.print("[red]Server does not exist. Unable to connect[/]")
-                    Event("PINGED SERVER", STATUS="UNKNOWN HOST")
-                case None:
-                    console.print("[yellow]server did not respond to ping. Unable to connect[/]")
-                    Event("PINGED SERVER", STATUS="NO RESPONSE")
-                case _:
-                    console.print(f"[green]Server exists[/]")
-                    Event("PINGED SERVER", STATUS="EXISTS")
-        else:
-            req = send_request({"action": "ping"}, raw=True)
-            last_ping = time.time()
-            # display appropriate message according ot stateus code
-            match req.status_code:
-                case 200:
-                    console.print(f"[green]Server {settings['module_server'].value} is online[/] (latency: {int(req.elapsed.seconds * 500 + req.elapsed.microseconds / 2000)}ms)")
-                    console.print(f"Message from server: {json.loads(req.text)['data']}")
-                    Event("PINGED SERVER", STATUS="ONLINE")
-                    return True
-                case 523:
-                    console.print(f"[red]Server {settings['module_server'].value} is offline[/]")
-                    Event("PINGED SERVER", STATUS="OFFLINE")
-                case 504:
-                    console.print("[red]Gateway Timeout (504). Server is offline[/]")
-                    Event("PINGED SERVER", STATUS="TIMEOUT")
-                case 500:
-                    console.print("[yellow]Server is updating (500). Server is offline[/]")
-                    Event("PINGED SERVER", STATUS="UPDATING")
-                case _:
-                    console.print(f"[red]Unknown error: {req.status_code}[/]")
-                    Event("PINGED SERVER", STATUS=req.status_code)
+        req = send_request({"action": "ping"}, raw=True)
+        last_ping = time.time()
+        # display appropriate message according ot stateus code
+        match req.status_code:
+            case 200:
+                console.print(f"[green]Server {settings['module_server'].value} is online[/] (latency: {int(req.elapsed.seconds * 500 + req.elapsed.microseconds / 2000)}ms)")
+                console.print(f"Message from server: {json.loads(req.text)['data']}")
+                Event("PINGED SERVER", STATUS="ONLINE")
+                return True
+            case 523:
+                console.print(f"[red]Server {settings['module_server'].value} is offline[/]")
+                Event("PINGED SERVER", STATUS="OFFLINE")
+            case 504:
+                console.print("[red]Gateway Timeout (504). Server is offline[/]")
+                Event("PINGED SERVER", STATUS="TIMEOUT")
+            case 500:
+                console.print("[yellow]Server is updating (500). Server is offline[/]")
+                Event("PINGED SERVER", STATUS="UPDATING")
+            case _:
+                console.print(f"[red]Unknown error: {req.status_code}[/]")
+                Event("PINGED SERVER", STATUS=req.status_code)
     except json.decoder.JSONDecodeError:
         console.print("[red]Server responded with bad JSON, and is likely down.[/]")
         Event("PINGED SERVER", STATUS="BAD JSON")
@@ -921,27 +908,37 @@ def send_feedback():
 
 
 def update_self():
-    for file in update_files:
-        # make backup
-        shutil.copyfile(file, f'{file}.bak')
-        req = requests.get(f"https://raw.githubusercontent.com/ArrowSlashArrow/problem-set-solver-v2/refs/heads/main/{file}")
-        # get file
-        if req.status_code != 200:
-            console.print(f"[red]Could not download {file}.[/]")
-            Event("FILE DOWNLOAD", FILE=file, STATUS="FAILED")
-            return
-        console.print(f"[green]Successfully downloaded {file}... [/]", end="")
-        Event("FILE DOWNLOAD", FILE=file, STATUS="OK")
-        # write to file
-        try:
-            open(file, "w").write(req.text)
-            console.print(f"[green]Successfully updated {file} :)[/]")
-            Event("FILE WRITE", FILE=file, STATUS="OK")
-        except Exception as e:
-            console.print(f"[red]Could not write to {file} because {e}[/]\n[yellow]Reverting to old copy of {file}...[/]")
-            shutil.copyfile(f'{file}.bak', file)
-            Event("FILE WRITE", FILE=file, STATUS="FAILED", REASON=e)
-        os.remove(f'{file}.bak')
+    with console.status("Updating files...", spinner="dots12"):
+        for file in update_files:
+            # make backup
+            if file in os.listdir():
+                shutil.copyfile(file, f'{file}.bak')
+            else:
+                open(f"{file}.bak", "w").close()
+            req = requests.get(f"https://raw.githubusercontent.com/ArrowSlashArrow/problem-set-solver-v2/refs/heads/main/{file}")
+            # get file
+            if req.status_code == 404:
+                console.print(f"[red]Could not download {file} because it was not found in the repo.[/]")
+                Event("FILE DOWNLOAD", FILE=file, STATUS="NOT FOUND")
+                os.remove(f'{file}.bak')
+            elif req.status_code != 200:
+                console.print(f"[red]Could not download {file} ({req.status_code}).[/]")
+                Event("FILE DOWNLOAD", FILE=file, STATUS="NOT FOUND")
+                os.remove(f'{file}.bak')
+            else:
+                console.print(f"[green]Successfully downloaded {file}... [/]", end="")
+                Event("FILE DOWNLOAD", FILE=file, STATUS="OK")
+                # write to file
+                try:
+                    open(file, "w", encoding="utf-8").write(req.text)
+                    console.print(f"[green]Successfully updated {file} :)[/]")
+                    Event("FILE WRITE", FILE=file, STATUS="OK")
+                except Exception as e:
+                    console.print(f"[red]Could not write to {file} because {e}[/]\n[yellow]Reverting to old copy of {file}...[/]")
+                    shutil.copyfile(f'{file}.bak', file)
+                    Event("FILE WRITE", FILE=file, STATUS="FAILED", REASON=e)
+                finally:
+                    os.remove(f'{file}.bak')
 
 
 def xor_encrypt(text: str, pwd: str):
@@ -949,18 +946,21 @@ def xor_encrypt(text: str, pwd: str):
 
 
 def open_admin_script(pwd):
+    if "admin_enc" not in os.listdir():
+        console.print("[yellow]you cannod doo dat saar. you need do redownlod de admin_enc fial.[/]")
     try:
         # decrypt the file
         f = open("admin_enc", "r").read()
         open("admin.py", "w").write(xor_encrypt(f, pwd))
         Event("DECRYPTED ADMIN PANEL", STATUS="OK")
     except Exception as e:
+        console.print(traceback.Traceback)
         console.print("[red]Failed to decrypt the admin panel[/]")
         Event("DECRYPTED ADMIN PANEL", STATUS="FAILED")
         return
 
     try:
-        import admin
+        import admin  # type:ignore
         admin.main()
         Event("RAN ADMIN PANEL", STATUS="OK")
     except:
@@ -1006,7 +1006,8 @@ def action_controller(action: str):
             try:
                 update_self()
             except Exception as e:
-                console.print(f"[red]could not update the script because {e}[/]")
+                console.print(traceback.Traceback())
+                console.print(f"[red]could not update the script.[/]")
         case "Print user guide":
             console.print(tutorial_str)
         case "Send feedback":
@@ -1019,13 +1020,8 @@ def action_controller(action: str):
             send_request(format_payload("exit")) if session else 0
             raise KeyboardInterrupt
         case "Open admin panel":
-            if "admin.py" not in os.listdir():
-                Event("OPENED ADMIN PANEL", STATUS="NOT THERE")
-                console.print("[yellow]Cannot open the admin panel; you need to download it first.[/]")
-                return
-            
             # check that user can access it
-            pwd = prompt.Prompt.ask("> Enter password to access the admin panel: ", password=True)
+            pwd = prompt.Prompt.ask("> Enter password to access the admin panel", password=True)
             if hashlib.sha256(pwd.encode("utf-8")).hexdigest() == "2ea4ee55710a0b15a49d93e6427e194fd69d0d064df722f280095c5c46b0453e":
                 Event("OPENED ADMIN PANEL", STATUS="GOOD PASSWORD")
                 open_admin_script(pwd)
@@ -1034,7 +1030,7 @@ def action_controller(action: str):
                 console.print("[red]Incorrect password.[/]")
 
         case "About":
-            print("Made by </> (arrow) and bitfeller on 2025/03/19, last updated on v1.1.1 at 2025/04/16")
+            print(about_str)
 
 
 def preload():
@@ -1061,8 +1057,6 @@ def preload():
     with console.status("Testing server connection...", spinner="earth"):
         # ping server and check connection
         server = f"https://{settings['module_server'].value}/"
- 
-        test_ping(mode="exists")
         online = test_ping()
 
     print()
