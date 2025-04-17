@@ -50,7 +50,7 @@ def signstr(num: float | int):
 class Fraction:
     def __init__(self, num, den=None):
         if den and parse_num(den) == 0:
-            raise ValueError("you cant put 0 in the denomerator buddy")
+            raise ValueError("A Fraction cannot have a denomerator of 0.")
         if type(num) is int:
             self.num = num
             self.den = den if den else 1
@@ -65,6 +65,10 @@ class Fraction:
             self.num = int(whole * factor + decimal * factor)
             self.den = factor
         elif type(num) is str:
+            if num.count("-") > 1 and num.count("/") == 0:
+                raise ValueError(f"Cannot create a Fraction from {num}{f'and {den}' if den else ''}")
+            if den and den.count("-") > 1 and den.count("/") == 0:
+                raise ValueError(f"Cannot create a Fraction from {num} and {den}")
             if den:
                 frac = Fraction(num) / Fraction(den)
                 self.num = frac.num
@@ -74,13 +78,19 @@ class Fraction:
                 if num.count(".") == 1 and num.count("/") == 0:  # float string
                     # slice the string into the respective chunks (whole.fraction)
                     float_parts = num.split(".")
+                    sign = 1
+                    whole = 0
+                    if len(float_parts[0]) > 0:
+                        if float_parts[0][0] == "-":
+                            sign = -1
+                            float_parts[0] = float_parts[0][1:]
+                        whole = int(float_parts[0])
+                    
                     # determine the denomerator from the fraction digit count
                     factor = 10**len(float_parts[1])
-                    # evaluate the whole amount (.fraction = 0.fraction)
-                    whole = 0 if len(float_parts[0]) == 0 else int(float_parts[0])
                     # process the two parts accordingly 
                     self.num = whole * factor + int(float_parts[1])
-                    self.den = factor
+                    self.den = factor * sign
                 elif num.count(".") > 1 and num.count("/") == 0:
                     raise ValueError(f"Cannot create a fraction from {num}")
                 else:
