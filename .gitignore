@@ -10,6 +10,7 @@ __pycache__/
 admin_enc
 admin.py
 .log
+*.bak
 modules/
 
 # Distribution / packaging

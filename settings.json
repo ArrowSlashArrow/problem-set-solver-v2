@@ -31,7 +31,7 @@
     ],
     "show_requests": [
         "boolean",
-        true,
+        false,
         "Show traffic sent and recieved from the module server"
     ],
     "shorthand_actions": [
