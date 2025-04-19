@@ -7,7 +7,6 @@ __pycache__/
 *.so
 
 # program-specific files
-admin_enc
 admin.py
 .log
 *.bak
