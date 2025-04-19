@@ -9,6 +9,11 @@
         "pmodmgr.bitfeller.uk",
         "Server where modules are stored"
     ],
+    "censor_server": [
+        "boolean",
+        false,
+        "Whether to censor the server domain or not"
+    ],
     "server_pw": [
         "string",
         "yourmum567%^&*",
@@ -27,7 +32,7 @@
     "ignore_filter": [
         "boolean",
         true,
-        "Toggles visibility of ignored modules"
+        "Whether to show ignored modules"
     ],
     "show_requests": [
         "boolean",
@@ -62,6 +67,11 @@
     "striped_rows": [
         "boolean",
         true,
-        "Whether the rows are in alternating colours or not. Helps to visually seperate them."
+        "Whether the rows are in alternating colours or not. Helps to visually seperate them"
+    ],
+    "display_tracebacks": [
+        "boolean",
+        true,
+        "Whether to display tracebacks when something goes wrong. Helps to debug the script"
     ]
 }

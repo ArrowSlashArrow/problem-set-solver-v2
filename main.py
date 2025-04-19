@@ -189,17 +189,31 @@ def solver():
 """
 
 # module table
-titles = {  # constant
+module_table_columns = {
     "ID": {"style": "cyan", "justify": "right"},
-    "Module Name": {"style": "green", "justify": "right"},
+    "Module Name": {"style": "green", "justify": "left"},
     "Module Description": {"style": "yellow", "justify": "left"},
     "Tags": {"style": "red", "justify": "left"},
     "Version": {"style": "purple", "justify": "right"},
     "Filename": {"style": "grey62", "justify": "right"}
 }
 
+settings_table_columns = {
+    "ID": {"style": "cyan", "justify": "right"},
+    "Setting": {"style": "green", "justify": "left"},
+    "Value": {"style": "yellow", "justify": "left"},
+    "Description": {"style": "red", "justify": "left"},
+    "Data Type": {"style": "purple", "justify": "left"},
+}
+
 # settings
 settings = {}
+
+# tracebacks
+def display_traceback():
+    if settings["display_tracebacks"].value:
+        console.print(traceback.Traceback())
+
 
 # wanted to refactor this but couldn't
 # if it works, don't touch it
@@ -211,6 +225,10 @@ def pack_dicts(*args):
     values = [list(arg.values()) for arg in args]
     vals = list(map(list, zip(*values[::-1])))
     return {k: v for k, v in zip(keys, vals)}
+
+
+def transpose(array):
+    return [list(m) for m in zip(*array)]
 
 
 # update the various settings arrays
@@ -235,12 +253,12 @@ def parse_num(num: str):
 # return rich table object
 # example title: {"fone linging": {"style": "cyan", "align": "left"}, ...}
 # example rows: [["data", "data", "data"], ...]
-def new_table(name: str, titles: dict, rows: list[list]):
+def new_table(name: str, columns: dict, rows: list[list]):
     module_table = table.Table(title=name)
     if "striped_rows" in settings and settings["striped_rows"].value:
         module_table.row_styles=["on grey11", "on grey15"]
 
-    for title, formatting in titles.items():
+    for title, formatting in columns.items():
         module_table.add_column(title, justify=formatting["justify"], style=formatting["style"])
     for vals in zip(*rows):
         module_table.add_row(*vals)
@@ -354,7 +372,7 @@ def update_module_table():
         if set(filters) <= set(module.tags):
             filtered_modules.append(module)
     module_table_data = get_module_data(filtered_modules)
-    module_table = new_table("Installed Modules", titles, module_table_data)
+    module_table = new_table("Installed Modules", module_table_columns, module_table_data)
 
 
 # returns module filename
@@ -434,7 +452,7 @@ def load_module(module: Module):
             Event("END MODULE", STATUS="OK")
         except Exception as e:
             Event("END MODULE", STATUS="CRASH")
-            console.print(traceback.Traceback())
+            display_traceback()
             console.print(f"[red]{module.name} crashed :([/]")
     else:
         Event("END MODULE", STATUS="NO SOLVER")
@@ -454,13 +472,8 @@ def format_settings(settings: list[Setting]):
 
 def change_settings():
     # initialize table and columns
-    settings_table = table.Table(title="Settings")
-    settings_table.add_column("ID", justify="right", style="cyan")
-    settings_table.add_column("Setting", justify="left", style="green")
-    settings_table.add_column("Value", justify="left", style="yellow")
-    settings_table.add_column("Description", justify="left", style="red")
-    settings_table.add_column("Data Type", justify="left", style="purple")
     
+    settings_table_data = []
     # populate settings table
     index = 0
     for setting in list(settings.values()):
@@ -468,8 +481,10 @@ def change_settings():
         value = str(setting.value)
         data_type = setting.type
         description = setting.description
-        settings_table.add_row(str(index), name, value, description, data_type)
+        settings_table_data.append([str(index), name, value, description, data_type])
         index += 1
+
+    settings_table = new_table("Settings", settings_table_columns, transpose(settings_table_data))
 
     console.print(settings_table)
     choice = get_valid_input(f"> Select the setting you want to change by its [cyan]ID[/] or [green]name[/]", list(settings.keys()), True, err_word="setting")
@@ -596,6 +611,7 @@ session = None
 online = False
 last_ping = 0
 server = ""
+server_str = ""
 
 headers = {
     "Content-Type": "application/json"
@@ -678,11 +694,11 @@ def show_response(req):
 
 def send_request(payload, raw=False):
     payload_arg = payload if "log" not in payload else "LOG FILE"
-    Event(f"SENDING PAYLOAD TO {server}", PAYLOAD=payload_arg)
+    Event(f"SENDING PAYLOAD TO {server_str}", PAYLOAD=payload_arg)
     req = requests.post(server, json=payload, headers=headers, timeout=settings["request_waittime"].value)
     if raw and settings["show_requests"].value:
         console.print(text.Text.from_markup("[[yellow]PAYLOAD[/]]") + text.Text(str(payload)))
-    Event(f"RESPONSE FROM {server}", CODE=req.status_code, RESPONSE=req.text)
+    Event(f"RESPONSE FROM {server_str}", CODE=req.status_code, RESPONSE=req.text)
     show_response(req)
     if json.loads(req.text)["data"] == "easter egg":
         print(r"easter egg triggered lmao goodbye (this is a 0.1% chance)")
@@ -699,12 +715,12 @@ def test_ping():
         # display appropriate message according ot stateus code
         match req.status_code:
             case 200:
-                console.print(f"[green]Server {settings['module_server'].value} is online[/] (latency: {int(req.elapsed.seconds * 500 + req.elapsed.microseconds / 2000)}ms)")
+                console.print(f"[green]Server {server_str} is online[/] (latency: {int(req.elapsed.seconds * 500 + req.elapsed.microseconds / 2000)}ms)")
                 console.print(f"Message from server: {json.loads(req.text)['data']}")
                 Event("PINGED SERVER", STATUS="ONLINE")
                 return True
             case 523:
-                console.print(f"[red]Server {settings['module_server'].value} is offline[/]")
+                console.print(f"[red]Server {server_str} is offline[/]")
                 Event("PINGED SERVER", STATUS="OFFLINE")
             case 504:
                 console.print("[red]Gateway Timeout (504). Server is offline[/]")
@@ -780,7 +796,7 @@ def list_server_modules():
         new_mod.tags = meta["tags"]
         modules.append(new_mod)
 
-    server_module_table = new_table(f"Modules on {settings['module_server'].value}", titles=titles, rows=get_module_data(modules[:]))
+    server_module_table = new_table(f"Modules on {server_str}", titles=module_table_columns, rows=get_module_data(modules[:]))
     console.print(server_module_table)
 
     return modules
@@ -793,7 +809,7 @@ def server_module_select():
     if selected_modules == "\0":
         return
 
-    Event(f"REQUESTING MODULES FROM {server}", MODULES=[m.filename for m in selected_modules])
+    Event(f"REQUESTING MODULES FROM {server_str}", MODULES=[m.filename for m in selected_modules])
     payload = format_payload("install", modules=selected_modules)
     mod_req = send_request(payload)
     mod_resp = json.loads(mod_req.text)["data"]
@@ -958,7 +974,7 @@ def open_admin_script(pwd):
         open("admin.py", "w").write(xor_encrypt(f, pwd))
         Event("DECRYPTED ADMIN PANEL", STATUS="OK")
     except Exception as e:
-        console.print(traceback.Traceback)
+        display_traceback()
         console.print("[red]Failed to decrypt the admin panel[/]")
         Event("DECRYPTED ADMIN PANEL", STATUS="FAILED")
         return
@@ -1014,7 +1030,7 @@ def action_controller(action: str):
             try:
                 update_self()
             except Exception as e:
-                console.print(traceback.Traceback())
+                display_traceback()
                 console.print(f"[red]could not update the script.[/]")
         case "Print user guide":
             console.print(tutorial_str)
@@ -1065,6 +1081,7 @@ def preload():
     with console.status("Testing server connection...", spinner="earth"):
         # ping server and check connection
         server = f"https://{settings['module_server'].value}/"
+        server_str = f"{server}" if settings['censor_server'].value else '[SERVER]'
         online = test_ping()
 
     print()
@@ -1114,8 +1131,8 @@ except KeyboardInterrupt:
     if not no_exit_text:
         print("\nThanks for using Problem Set Solver by </> (arrow) and bitfeller!\nExiting...")  
     Event("END PROGRAM", STATUS="OK")
-    quit()
+    sys.exit(0)
 except Exception as e:
-    console.print(traceback.Traceback())
+    display_traceback()
     print(f"Script crashed\nExiting...")
     Event("END PROGRAM", STATUS="CRASH", REASON=e)
