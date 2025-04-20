@@ -960,8 +960,9 @@ def update_self():
                     os.remove(f'{file}.bak')
 
 
-def xor_encrypt(text: str, pwd: str):
-    return "".join([chr(ord(char) ^ ord(pwd[index % len(pwd)])) for index, char in enumerate(text)])
+def xor_encrypt(text: bytes, pwd: str):
+    pwd_encoded = pwd.encode()
+    return bytes([byte ^ pwd_encoded[index % len(pwd_encoded)] for index, byte in enumerate(text)])
 
 
 def open_admin_script(pwd):
@@ -970,8 +971,8 @@ def open_admin_script(pwd):
         return
     try:
         # decrypt the file
-        f = open("admin_enc", "r").read()
-        open("admin.py", "w").write(xor_encrypt(f, pwd))
+        f = open("admin_enc", "rb").read()
+        open("admin.py", "wb").write(xor_encrypt(f, pwd))
         Event("DECRYPTED ADMIN PANEL", STATUS="OK")
     except Exception as e:
         display_traceback()
