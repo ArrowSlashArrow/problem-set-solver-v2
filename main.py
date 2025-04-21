@@ -795,8 +795,8 @@ def list_server_modules():
         new_mod.filename = meta["filename"]
         new_mod.tags = meta["tags"]
         modules.append(new_mod)
-
-    server_module_table = new_table(f"Modules on {server_str}", titles=module_table_columns, rows=get_module_data(modules[:]))
+    
+    server_module_table = new_table(f"Modules on {server_str}", columns=module_table_columns, rows=get_module_data(modules[:]))
     console.print(server_module_table)
 
     return modules
@@ -1059,7 +1059,7 @@ def action_controller(action: str):
 
 
 def preload():
-    global online, server
+    global online, server, server_str
     os.system("cls" if os.name == "nt" else "clear")
 
     # create /modules if it does not exist
