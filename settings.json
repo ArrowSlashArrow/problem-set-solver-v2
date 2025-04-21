@@ -39,11 +39,6 @@
         false,
         "Show traffic sent and recieved from the module server"
     ],
-    "shorthand_actions": [
-        "boolean",
-        false,
-        "Enables shorthand for actions (e.g. 'ls' = 'list modules')"
-    ],
     "autoupdate_modules": [
         "boolean",
         true,
@@ -51,7 +46,7 @@
     ],
     "autoupdate_script": [
         "boolean",
-        false,
+        true,
         "Automatically updates the script upon startup"
     ],
     "reconnect_timeout": [
