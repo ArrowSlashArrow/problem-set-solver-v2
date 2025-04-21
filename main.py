@@ -166,14 +166,16 @@ actions = {
     "Restart": "r",
     "Exit": "x"
 }
-
+settings_file = "settings.json"
 update_files = [
     # "main.py",
     "utils.py",
     "requirements.txt",
     "README.md",
-    "admin_enc"
+    "admin_enc",
+    settings_file
 ]
+
 
 # name, desc, tags, version, 
 boilerplate = """# name: <NAME>
@@ -211,7 +213,7 @@ settings = {}
 
 # tracebacks
 def display_traceback():
-    if settings["display_tracebacks"].value:
+    if get_setting("display_tracebacks"):
         console.print(traceback.Traceback())
 
 
@@ -230,6 +232,11 @@ def pack_dicts(*args):
 def transpose(array):
     return [list(m) for m in zip(*array)]
 
+def get_setting(setting, fallback=None):
+    if not setting in list(settings.keys()):
+        return fallback
+    
+    return settings[setting].value
 
 # update the various settings arrays
 def update_settings():
@@ -255,7 +262,7 @@ def parse_num(num: str):
 # example rows: [["data", "data", "data"], ...]
 def new_table(name: str, columns: dict, rows: list[list]):
     module_table = table.Table(title=name)
-    if "striped_rows" in settings and settings["striped_rows"].value:
+    if "striped_rows" in settings and get_setting("striped_rows"):
         module_table.row_styles=["on grey11", "on grey15"]
 
     for title, formatting in columns.items():
@@ -319,7 +326,7 @@ def get_metadata(file: str, raw_str=False):
             current_module.tags = line.split("# tags: ")[1].split(", ")
         if "# version: " in line:
             current_module.version = int(line.split("# version: ")[1])
-        if settings["ignore_str"].value in line.lower():
+        if get_setting("ignore_str").value in line.lower():
             ignore = True
     return current_module if not ignore else "IGNORE"
 
@@ -361,7 +368,8 @@ def update_module_table():
     global module_table, module_table_data
     refresh_modules()
 
-    filters = [tag.lstrip().rstrip() for tag in settings["filter_tags"].value.split(",")]
+    filter_tags = get_setting("filter_tags", "")
+    filters = [tag.lstrip().rstrip() for tag in filter_tags.split(",")]
     # gets rid of empty strings
     for filter in filters:
         if filter == "":
@@ -412,7 +420,7 @@ def action_select():
         "Action": {"style": "yellow", "justify": "left"}
     }
     action_table_data = [ids, full_actions]
-    if settings["shorthand_actions"].value:
+    if get_setting("shorthand_actions"):
         titles["Shorthand"] = {"style": "red", "justify": "left"}
         action_table_data.append(shorthand)
 
@@ -567,7 +575,7 @@ def delete_module():
         except Exception as e:
             Event("DELETED ALL MODULES", STATUS="FAILED", REASON=e)
     else:
-        if settings["confirm_delete"].value:
+        if get_setting("confirm_delete"):
             if not get_bool(f"Are you sure you want to delete {module.name} ({module.filename})?"):
                 return
         os.remove(f"modules/{module.filename}")
@@ -622,8 +630,8 @@ def get_bool(msg):
 
 
 def get_server_pw():
-    pw = settings["server_pw"].value
-    if len(pw) <= 0: 
+    pw = get_setting("server_pw")
+    if not pw or len(pw) <= 0: 
         pw = prompt.Prompt.ask("Enter password for server")
     return pw
 
@@ -675,19 +683,17 @@ def format_payload(payload: str, modules=[], feedback="", pwd=""):
         case "log":
             Event("SESSION", SESSION=session)
             ready_payload["log"] = open(".log", "r").read().split("\n\n")[-1]
-        case "admin script":
-            ready_payload["pwd"] = pwd
         case _:
             pass
 
-    if settings["show_requests"].value:
+    if get_setting("show_requests"):
         console.print(text.Text.from_markup("[[yellow]PAYLOAD[/]]") + text.Text(str(ready_payload)))
     
     return ready_payload
 
 
 def show_response(req):
-    if settings["show_requests"].value:
+    if get_setting("show_requests"):
         colour = "[red]" if json.loads(req.text)["success"] == 0 else "[green]"
         console.print(text.Text.from_markup(f"[{colour}RESPONSE[/]]") + text.Text(str(req.text)))
 
@@ -695,8 +701,9 @@ def show_response(req):
 def send_request(payload, raw=False):
     payload_arg = payload if "log" not in payload else "LOG FILE"
     Event(f"SENDING PAYLOAD TO {server_str}", PAYLOAD=payload_arg)
-    req = requests.post(server, json=payload, headers=headers, timeout=settings["request_waittime"].value)
-    if raw and settings["show_requests"].value:
+    timeout = get_setting("request_waittime", 30)
+    req = requests.post(server, json=payload, headers=headers, timeout=timeout)
+    if raw and get_setting("show_requests"):
         console.print(text.Text.from_markup("[[yellow]PAYLOAD[/]]") + text.Text(str(payload)))
     Event(f"RESPONSE FROM {server_str}", CODE=req.status_code, RESPONSE=req.text)
     show_response(req)
@@ -757,7 +764,7 @@ def get_session():
 
 
 def reconnect():
-    if last_ping + settings["reconnect_timeout"].value < time.time():
+    if last_ping + get_setting("reconnect_timeout") < time.time():
         console.print("[red]Server is offline. Unable to perform action.[/]")
     else:
         Event("RECONNECT ATTEMPT")
@@ -928,6 +935,7 @@ def send_feedback():
 
 def update_self():
     with console.status("Updating files...", spinner="dots12"):
+        # update settings separately
         for file in update_files:
             # make backup
             if file in os.listdir():
@@ -949,8 +957,17 @@ def update_self():
                 Event("FILE DOWNLOAD", FILE=file, STATUS="OK")
                 # write to file
                 try:
-                    open(file, "w", encoding="utf-8").write(req.text)
-                    console.print(f"[green]Successfully updated {file} :)[/]")
+                    if file == settings_file:
+                        new_settings_raw = json.loads(req.text)
+                        new_settings = {}
+                        for key in list(new_settings_raw.keys()):
+                            new_settings[key] = (Setting(key, *new_settings_raw[key][0:3]))
+                        for key, value in new_settings.items():
+                            if key not in settings:
+                                settings[key] = value
+                    else:
+                        open(file, "w", encoding="utf-8").write(req.text)
+                        console.print(f"[green]Successfully updated {file} :)[/]")
                     Event("FILE WRITE", FILE=file, STATUS="OK")
                 except Exception as e:
                     console.print(f"[red]Could not write to {file} because {e}[/]\n[yellow]Reverting to old copy of {file}...[/]")
@@ -1089,7 +1106,7 @@ def preload():
     installed_modules = [f for f in os.listdir("modules") if f != "utils.py" and f.endswith(".py")]
     # autoupdate
     try:
-        if settings["autoupdate_modules"].value and len(installed_modules) > 0:
+        if get_setting("autoupdate_modules") and len(installed_modules) > 0:
             updating = len(installed_modules)
             with console.status(f"\nUpdating {updating} module{'s' if updating != 1 else ''}...", spinner="bouncingBar"):
                 update_all(status_text=True)
@@ -1099,7 +1116,7 @@ def preload():
         Event("MODULE AUTOUPDATE", STATUS="FAILED", REASON=e)
     
     try:
-        if settings["autoupdate_script"].value:
+        if get_setting("autoupdate_script"):
             print()
             with console.status(f"\nUpdating the script...", spinner="bouncingBar"):
                 update_self()
