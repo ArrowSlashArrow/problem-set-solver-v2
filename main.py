@@ -428,7 +428,7 @@ def action_select():
     console.print(action_table)
     available_actions = lower_actions[:]
     available_actions.extend(shorthand)
-    choice = get_valid_input(f"> Select an action by its [green]ID[/] or [yellow]name[/]{f' or [red]shorthand[/]' if settings['shorthand_actions'].value else ''}", available_actions, indices=True, err_word="action")
+    choice = get_valid_input(f"> Select an action by its [green]ID[/] or [yellow]name[/]{f' or [red]shorthand[/]' if get_setting('shorthand_actions') else ''}", available_actions, indices=True, err_word="action")
     
     if choice in shorthand:
         choice = full_actions[shorthand.index(choice)]
