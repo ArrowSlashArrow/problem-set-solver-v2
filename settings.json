@@ -93,6 +93,7 @@
         "Files to update",
         "list",
         [
+            "main.py",
             "utils.py",
             "README.md",
             "admin_enc"
