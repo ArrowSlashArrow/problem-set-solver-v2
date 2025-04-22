@@ -389,8 +389,9 @@ def module_select(other_valid_inputs=[]):
     # update table at execution time to account for imported modules
     update_module_table()
     # info messages
-    if len(settings['filter_tags'].value) > 0:
-        console.print(f"Searching by these tags: {', '.join(settings['filter_tags'].value)}")
+    filters = get_setting('filter_tags')
+    if len(filters) > 0:
+        console.print(f"Searching by these tags: {', '.join(filters)}")
     console.print("If no modules show up, type 'back' and try again in a few seconds, or check your tags setting.")
     console.print(module_table)
 
@@ -764,7 +765,7 @@ def get_session():
 
 
 def reconnect():
-    if last_ping + get_setting("reconnect_timeout") < time.time():
+    if last_ping + get_setting("reconnect_timeout", 10) < time.time():
         console.print("[red]Server is offline. Unable to perform action.[/]")
     else:
         Event("RECONNECT ATTEMPT")
@@ -1098,8 +1099,8 @@ def preload():
 
     with console.status("Testing server connection...", spinner="earth"):
         # ping server and check connection
-        server = f"https://{settings['module_server'].value}/"
-        server_str = f"{server}" if settings['censor_server'].value else '[SERVER]'
+        server = f"https://{get_setting('module_server')}/"
+        server_str = f"{server}" if get_setting("censor_server") else '[SERVER]'
         online = test_ping()
 
     print()
@@ -1152,5 +1153,5 @@ except KeyboardInterrupt:
     sys.exit(0)
 except Exception as e:
     display_traceback()
-    print(f"Script crashed\nExiting...")
+    print(f"Script crashed ({e})\nExiting...")
     Event("END PROGRAM", STATUS="CRASH", REASON=e)
