@@ -665,7 +665,8 @@ def server_required(func):
     def wrapper(*args, **kwargs):
         global session
         # check if server is online
-        if not online and not reconnect():
+        no_error_msg = kwargs.get("no_error_msg") == True  # None -> False
+        if not online and not reconnect(no_error_msg):
             return
 
         # assumes server is online
@@ -678,7 +679,7 @@ def server_required(func):
 
 
 @server_required
-def format_payload(payload: str, modules=[], feedback="", pwd=""):
+def format_payload(payload: str, modules=[], feedback="", pwd="", no_error_msg=False):
     global session
     ready_payload = {
         "action": payload
@@ -723,11 +724,16 @@ def show_response(req):
         console.print(text.Text.from_markup(f"[{colour}RESPONSE[/]]") + text.Text(str(req.text)))
 
 
-def send_request(payload, raw=False):
-    payload_arg = payload if "log" not in payload else "LOG FILE"
+def send_request(payload, raw=False, no_err=False):
+    payload_arg = payload if "log" not in (payload or {}) else "LOG FILE"
     Event(f"SENDING PAYLOAD TO {server_str}", PAYLOAD=payload_arg)
     timeout = get_setting("request_waittime", 30)
-    req = requests.post(server, json=payload, headers=headers, timeout=timeout)
+    try:
+        req = requests.post(server, json=payload, headers=headers, timeout=timeout)
+    except Exception as e:
+        if not no_err:
+            console.print("[red]Could not send payload to server.[/]")
+        return
     if raw and get_setting("show_requests"):
         console.print(text.Text.from_markup("[[yellow]PAYLOAD[/]]") + text.Text(str(payload)))
     Event(f"RESPONSE FROM {server_str}", CODE=req.status_code, RESPONSE=req.text)
@@ -739,35 +745,47 @@ def send_request(payload, raw=False):
 
 
 # returns true if server is online
-def test_ping():
+def test_ping(no_error_msg=False):
     global last_ping
     try:
         req = send_request({"action": "ping"}, raw=True)
         last_ping = time.time()
         # display appropriate message according ot stateus code
-        match req.status_code:
+        try:
+            status_code = req.status_code
+        except:
+            status_code = -1
+        match status_code:
             case 200:
                 console.print(f"[green]Server {server_str} is online[/] (latency: {int(req.elapsed.seconds * 500 + req.elapsed.microseconds / 2000)}ms)")
                 console.print(f"Message from server: {json.loads(req.text)['data']}")
                 Event("PINGED SERVER", STATUS="ONLINE")
                 return True
             case 523:
-                console.print(f"[red]Server {server_str} is offline[/]")
+                if not no_error_msg:
+                    console.print(f"[red]Server {server_str} is offline[/]")
                 Event("PINGED SERVER", STATUS="OFFLINE")
             case 504:
-                console.print("[red]Gateway Timeout (504). Server is offline[/]")
+                if not no_error_msg:
+                    console.print("[red]Gateway Timeout (504). Server is offline[/]")
                 Event("PINGED SERVER", STATUS="TIMEOUT")
             case 500:
                 console.print("[yellow]Server is updating (500). Server is offline[/]")
                 Event("PINGED SERVER", STATUS="UPDATING")
+            case -1:
+                if not no_error_msg:
+                    console.print("[red]Unable to connect to the server.[/]")
+                Event("PINGED SERVER", STATUS="NO CONNECTION")
             case _:
-                console.print(f"[red]Unknown error: {req.status_code}[/]")
-                Event("PINGED SERVER", STATUS=req.status_code)
+                console.print(f"[red]Unknown error: {status_code}[/]")
+                Event("PINGED SERVER", STATUS=status_code)
     except json.decoder.JSONDecodeError:
-        console.print("[red]Server responded with bad JSON, and is likely down.[/]")
+        if not no_error_msg:
+            console.print("[red]Server responded with bad JSON, and is likely down.[/]")
         Event("PINGED SERVER", STATUS="BAD JSON")
     except Exception as e:
-        console.print(f"[red]Could not connect to the server for this reason: {e} [/]") 
+        if not no_error_msg:
+            console.print(f"[red]Could not connect to the server for this reason: {e} [/]") 
         Event("PINGED SERVER", STATUS="FAILED", REASON={e})   
     return False
 
@@ -788,12 +806,14 @@ def get_session():
     return session
 
 
-def reconnect():
+def reconnect(no_error_msg=False):
     if last_ping + get_setting("reconnect_timeout", 10) < time.time():
-        console.print("[red]Server is offline. Unable to perform action.[/]")
+        if not no_error_msg:
+            console.print("[red]Server is offline. Unable to perform action.[/]")
     else:
         Event("RECONNECT ATTEMPT")
-        console.print("[red]Server is offline.[/][yellow] Attempting to reconnect...[/]")
+        if not no_error_msg:
+            console.print("[red]Server is offline.[/][yellow] Attempting to reconnect...[/]")
         online = test_ping()
         if online:
             return True
@@ -1087,8 +1107,8 @@ def action_controller(action: str):
             restart()
         case "Exit":
             print("Exiting...")
-            send_request(format_payload("log"))
-            send_request(format_payload("exit")) if session else 0
+            send_request(format_payload("log", no_error_msg=True), no_err=True)
+            send_request(format_payload("exit", no_error_msg=True), no_err=True) if session else 0
             raise KeyboardInterrupt
         case "Open admin panel":
             print_back_message()
