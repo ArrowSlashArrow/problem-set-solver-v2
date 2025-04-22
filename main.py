@@ -1,5 +1,6 @@
 import os, sys, subprocess, time  # theres no way these every fail to import
 log_file = ".log"
+abnormal_exit = False
 class Event:
     def __init__(self, name="UNKNOWN EVENT", **kwargs):
         self.values = kwargs
@@ -45,6 +46,7 @@ except ModuleNotFoundError as e:
         else:
             restart()
     except Exception as e:
+        abnormal_exit = True
         print(f"\x1b[38;5;9mFATAL\x1b[0m] \x1b[38;5;9mCould not install the required libraries. please run '{install_str}'\n Error: {e}\x1b[0m")
     
 
@@ -106,8 +108,9 @@ modules = []
 
 info = {
     "authors": ["Authors: ", "</> (arrow) and bitfeller"],
-    "version": ["Version: ", "1.1.1"],
-    "last_updated": ["Last updated on: ", "2025/04/16"]
+    "version": ["Version: ", "1.1.2"],
+    "last_updated": ["Last updated on: ", "2025/04/16"],
+    "build_num": ["Build number: ", "forgot to include this at the start and lost count"]
 }
 
 about_txt = "\n".join(f" - {value[0]}{value[1]}" for value in info.values())
@@ -167,14 +170,7 @@ actions = {
     "Exit": "x"
 }
 settings_file = "settings.json"
-update_files = [
-    # "main.py",
-    "utils.py",
-    "requirements.txt",
-    "README.md",
-    "admin_enc",
-    settings_file
-]
+update_files = []
 
 
 # name, desc, tags, version, 
@@ -229,6 +225,21 @@ def pack_dicts(*args):
     return {k: v for k, v in zip(keys, vals)}
 
 
+# merges all of the dicts by key
+# if a key already has a value in a previous dict, the value does not get overwritten
+# otherwise, the key is added to the conglomerate
+def merge_dicts(*args):
+    if len(args) == 0:
+        return {}
+    
+    # don't like the nesting but it works so whatever
+    conglomerate = args[0]
+    for arg in args:
+        for key, value in arg.items():
+            if key not in conglomerate:
+                conglomerate[key] = value
+    return conglomerate    
+
 def transpose(array):
     return [list(m) for m in zip(*array)]
 
@@ -241,9 +252,13 @@ def get_setting(setting, fallback=None):
 # update the various settings arrays
 def update_settings():
     global settings, setting_data
-    raw_settings = json.load(open("settings.json", "r"))
-    for key in list(raw_settings.keys()):
-        settings[key] = (Setting(key, *raw_settings[key][0:3]))
+    raw_settings_file = open(settings_file, "r").read()
+    if raw_settings_file.strip() == "":
+        open(settings_file, "w").write("{}")  # write empty dict
+        raw_settings_file = "{}"
+    raw_settings_dict = json.loads(raw_settings_file)
+    for key in list(raw_settings_dict.keys()):
+        settings[key] = (Setting(*raw_settings_dict[key]))
 
 
 # parse num util function
@@ -278,7 +293,7 @@ def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=F
     if not many:
         choice = ""
         while True:
-            inp = prompt.Prompt.ask(input_message).lower().rstrip().lstrip()
+            inp = prompt.Prompt.ask(input_message).lower().strip()
             if inp == "back" and back_enabled:
                 choice = "\0"
                 break
@@ -296,7 +311,7 @@ def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=F
         return choice
     else:
         choices = []
-        inp = [i.lstrip().rstrip() for i in prompt.Prompt.ask(input_message).split(",")]
+        inp = [i.strip() for i in prompt.Prompt.ask(input_message).split(",")]
         if inp[0].lower() in ["all", "everything"] and everything:
             return original_inputs
         for i in inp:
@@ -326,7 +341,7 @@ def get_metadata(file: str, raw_str=False):
             current_module.tags = line.split("# tags: ")[1].split(", ")
         if "# version: " in line:
             current_module.version = int(line.split("# version: ")[1])
-        if get_setting("ignore_str").value in line.lower():
+        if get_setting("ignore_str") in line.lower():
             ignore = True
     return current_module if not ignore else "IGNORE"
 
@@ -352,7 +367,7 @@ def refresh_modules(loaded_text=False):
         except PermissionError:
             console.print(f"[red]Could not access {module_files[m]}: Permission denied[/]")
         except Exception as e:
-            console.print(f"[red]Couldnt read {module_files[m]} becuase {e}[/]")
+            console.print(f"[red]Couldnt read {module_files[m]} because {e}[/]")
 
         # get the rest of metadata
         current_module.filename = module_files[m]
@@ -368,8 +383,7 @@ def update_module_table():
     global module_table, module_table_data
     refresh_modules()
 
-    filter_tags = get_setting("filter_tags", "")
-    filters = [tag.lstrip().rstrip() for tag in filter_tags.split(",")]
+    filters = get_setting("filter_tags", "")
     # gets rid of empty strings
     for filter in filters:
         if filter == "":
@@ -468,14 +482,14 @@ def load_module(module: Module):
         console.print(f"\n[yellow]{module.name} does not have a solver() function. Unable to run module.[/]\n")
 
 
-def boolstr(s: str):
-    return 
+def print_back_message():
+    console.print("If you would like to go back to the action selection menu, simply input '[green]back[/]'.")
 
 
 def format_settings(settings: list[Setting]):
     raw_settings = {}
-    for setting in list(settings.values()):
-        raw_settings[setting.name] = [setting.type, setting.value, setting.description]
+    for key, setting in settings.items():
+        raw_settings[key] = [setting.name, setting.type, setting.value, setting.description]
     return raw_settings
 
 
@@ -500,13 +514,15 @@ def change_settings():
     if choice == "\0":
         return
     
-    inp = prompt.Prompt.ask(f"Enter the new value for {choice}")
+    inp = None
     
     # format input according to data type
     match settings[choice].type:
         case "boolean":
+            inp = prompt.Prompt.ask(f"Enter the new value for {choice} [yes/no]: ")
             inp = inp.lower() in ("true", "yes", "ye", "1", "y", "yep", "yea", "yeah")
         case "positive number":
+            inp = prompt.Prompt.ask(f"Enter the new value for {choice} (positive number): ")
             parsed = parse_num(inp)
             if type(parsed) not in [float, int]:
                 console.print(f"[yellow] Unable to set {choice} to {inp}, the new value should be a positive number[/]")
@@ -515,13 +531,21 @@ def change_settings():
                 console.print(f"[yellow] Unable to set {choice} to {inp}, the new value must be positive.[/]")
                 return
             inp = parsed 
+        case "list":
+            inp = prompt.Prompt.ask(f"Enter the new value for {choice} [values separated by commas]: ")
+            inp = [val.strip() for val in inp.split(",")]
+        case _:
+            inp = prompt.Prompt.ask(f"Enter the new value for {choice}")
 
     # change and save setting
     Event("SETTING CHANGE", SETTING=choice, VALUE=inp)
     settings[choice].value = inp
     Event("SAVED SETTINGS")
-    json.dump(format_settings(settings), open("settings.json", "w"), indent=4)
+    save_settings()
 
+
+def save_settings():
+    json.dump(format_settings(settings), open(settings_file, "w"), indent=4)
 
 def local_file_select():
     # get file
@@ -918,7 +942,7 @@ def update_all(status_text=False):
 @server_required
 def send_feedback():
     feedback = input("> What feedback would you like to share with us?\n> ")
-    if feedback == "\0":
+    if feedback == "back":
         return
     try:
         # loads request as dict
@@ -935,6 +959,9 @@ def send_feedback():
 
 
 def update_self():
+    global settings
+    if len(update_files) == 0:
+        console.print("[yellow]No files were listed to updated. Check your 'Files to update' setting.[/]")
     with console.status("Updating files...", spinner="dots12"):
         # update settings separately
         for file in update_files:
@@ -963,12 +990,13 @@ def update_self():
                         new_settings = {}
                         for key in list(new_settings_raw.keys()):
                             new_settings[key] = (Setting(key, *new_settings_raw[key][0:3]))
-                        for key, value in new_settings.items():
-                            if key not in settings:
-                                settings[key] = value
+                        merged_settings = merge_dicts(settings, new_settings)
+                        settings = merged_settings
+                        save_settings()
                     else:
                         open(file, "w", encoding="utf-8").write(req.text)
-                        console.print(f"[green]Successfully updated {file} :)[/]")
+                    
+                    console.print(f"[green]Successfully updated {file} :)[/]")
                     Event("FILE WRITE", FILE=file, STATUS="OK")
                 except Exception as e:
                     console.print(f"[red]Could not write to {file} because {e}[/]\n[yellow]Reverting to old copy of {file}...[/]")
@@ -989,26 +1017,19 @@ def open_admin_script(pwd):
         return
     try:
         # decrypt the file
-        f = open("admin_enc", "rb").read()
-        open("admin.py", "wb").write(xor_encrypt(f, pwd))
-        Event("DECRYPTED ADMIN PANEL", STATUS="OK")
-    except Exception as e:
-        display_traceback()
-        console.print("[red]Failed to decrypt the admin panel[/]")
-        Event("DECRYPTED ADMIN PANEL", STATUS="FAILED")
-        return
-
-    try:
-        import admin  # type:ignore
-        admin.main()
+        main_handler = """
+try:
+    main()
+except KeyboardInterrupt:
+    console.print("Exiting...")
+except:
+    console.print("[red]Admin panel crashed[/]")
+""" 
+        exec(xor_encrypt(open("admin_enc", "rb").read(), pwd).decode("utf-8") + main_handler, {"__name__": "__main__", "__builtins__": __builtins__})
         Event("RAN ADMIN PANEL", STATUS="OK")
-    except:
-        console.print("[red]Admin panel crashed[/]")
+    except Exception as e:
+        console.print("[red]Failed to run the admin panel[/]")
         Event("RAN ADMIN PANEL", STATUS="FAILED")
-    
-    # delete the temp file
-    os.remove("admin.py")
-    Event("DELETED DECRYPTED ADMIN PANEL")
 
 
 def action_controller(action: str):
@@ -1030,20 +1051,26 @@ def action_controller(action: str):
         case "Import module from file":
             local_file_select()
         case "Import module from server":
+            print_back_message()
             server_module_select()
         case "Export module to server":
+            print_back_message()
             upload_module()
         case "Update a module":
+            print_back_message()
             update_module()
         case "Update all modules":
             update_all()
         case "Create a new module":
+            print_back_message()
             create_module()
         case "Remove a module":
+            print_back_message()
             delete_module()
         case "Display all modules on server":
             list_server_modules()
         case "Change settings":
+            print_back_message()
             change_settings()
         case "Update the script":
             try:
@@ -1054,6 +1081,7 @@ def action_controller(action: str):
         case "Print user guide":
             console.print(tutorial_str)
         case "Send feedback":
+            print_back_message()
             send_feedback()
         case "Restart":
             restart()
@@ -1063,8 +1091,11 @@ def action_controller(action: str):
             send_request(format_payload("exit")) if session else 0
             raise KeyboardInterrupt
         case "Open admin panel":
+            print_back_message()
             # check that user can access it
             pwd = prompt.Prompt.ask("> Enter password to access the admin panel", password=True)
+            if pwd.strip() == "back":
+                return
             if hashlib.sha256(pwd.encode("utf-8")).hexdigest() == "878248de86cb7e6492aae17cddff64c393ca018c872ced068e846737e7ec7448":
                 Event("OPENED ADMIN PANEL", STATUS="GOOD PASSWORD")
                 open_admin_script(pwd)
@@ -1077,7 +1108,7 @@ def action_controller(action: str):
 
 
 def preload():
-    global online, server, server_str
+    global online, server, server_str, abnormal_exit, settings_file, update_files
     os.system("cls" if os.name == "nt" else "clear")
 
     # create /modules if it does not exist
@@ -1087,15 +1118,19 @@ def preload():
         os.mkdir("modules")
 
     try:
-        with console.status("Loading...", spinner="dots12"):
+        with console.status("Loading settings...", spinner="dots12"):
             # load settings
+            if settings_file not in os.listdir():
+                open(settings_file, "w").close()
             update_settings()
+            settings_file = get_setting(settings_file, "settings.json")
+            update_files = get_setting("update_files", []) + [settings_file]
         console.print("[green]Loaded settings successfully[/]")
         Event("LOADED SETTINGS", STATUS="OK")
     except Exception as e:
-        console.print("[red]FATAL: Could not load settings[/]")
-        Event("LOADED SETTINGS", STATUS="FAILED", REASON=e)
-        raise KeyboardInterrupt
+        console.print(f"[red]Could not find {settings_file}[/]\n[yellow]Running bare-bones installation of PSS. Please update the script (action 12) to download the settings file.[/]")
+        Event("LOADED SETTINGS", STATUS="NOT FOUND", REASON=e)
+        open(settings_file, "w").write("{}")
 
     with console.status("Testing server connection...", spinner="earth"):
         # ping server and check connection
@@ -1133,22 +1168,18 @@ def main():
     preload()
     Event("PRELOAD COMPLETE")
 
-    # sample code for the admin panel
-    # enc_file = "06-0a-14-44-08-13-05-07-46-4c-1a-79-50-59-57-41-02-17-0b-01-06-4c-47-1a-09-05-02-0a-0c-53-07-16-05-0d-16-44-40-46".split("-")
-    # open("admin_enc", "w").write("".join([chr(int(n, 16)) for n in enc_file]))
-    
     while True:
         action_controller(action_select())
         update_settings()
-
 
 
 try:
     if __name__ == "__main__":
         main()
 except KeyboardInterrupt:
-    if not no_exit_text:
-        print("\nThanks for using Problem Set Solver by </> (arrow) and bitfeller!\nExiting...")  
+    if not no_exit_text and not abnormal_exit:
+        print("\nThanks for using Problem Set Solver by </> (arrow) and bitfeller!")
+    print("Exiting...")  
     Event("END PROGRAM", STATUS="OK")
     sys.exit(0)
 except Exception as e:
