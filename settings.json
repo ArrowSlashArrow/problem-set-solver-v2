@@ -1,77 +1,102 @@
 {
     "filter_tags": [
+        "Filter by tags",
         "list",
-        " ",
+        [],
         "Tags by which modules are filtered"
     ],
     "module_server": [
+        "Module server",
         "domain",
         "pmodmgr.bitfeller.uk",
         "Server where modules are stored"
     ],
     "censor_server": [
+        "Censor server",
         "boolean",
         false,
         "Whether to censor the server domain or not"
     ],
     "server_pw": [
+        "Server password",
         "string",
         "yourmum567%^&*",
         "Password to the script running on the module server"
     ],
     "ignore_str": [
+        "Ignore string",
         "string",
         "# ignore_module",
         "String which is searched for to mark a module as ignored"
     ],
     "confirm_delete": [
+        "Delete confirmation",
         "boolean",
         true,
         "Toggles confirmation prompt before deleting a module"
     ],
     "ignore_filter": [
+        "Filter ignored modules",
         "boolean",
         true,
         "Whether to show ignored modules"
     ],
     "show_requests": [
+        "Show requests",
         "boolean",
         false,
         "Show traffic sent and recieved from the module server"
     ],
     "shorthand_actions": [
+        "Shorthand actions",
         "boolean",
         false,
         "Enables shorthand for actions (e.g. 'ls' = 'list modules')"
     ],
     "autoupdate_modules": [
+        "Automatically update the modules",
         "boolean",
         true,
         "Automatically updates all modules at the start of the program"
     ],
     "autoupdate_script": [
+        "Automatically update the script",
         "boolean",
         false,
         "Automatically updates the script upon startup"
     ],
     "reconnect_timeout": [
+        "Time to wait before reconnecting",
         "positive number",
         15,
         "The amount of seconds the script waits before attempting to reconnect to the server"
     ],
     "request_waittime": [
+        "Time to wait for the server's response",
         "positive number",
         5,
         "The amount of seconds the script waits before marking a request as 'timed out'"
     ],
     "striped_rows": [
+        "Striped rows",
         "boolean",
         true,
         "Whether the rows are in alternating colours or not. Helps to visually seperate them"
     ],
     "display_tracebacks": [
+        "Show tracebacks (helpful for debugging)",
         "boolean",
         true,
-        "Whether to display tracebacks when something goes wrong. Helps to debug the script"
+        "Whether to display tracebacks when something goes wrong"
+    ],
+    "update_files": [
+        "Files to update",
+        "list",
+        [
+            "utils.py",
+            "README.md",
+            "admin_enc"
+        ],
+        "Files that will be updated. Filenames must match those in the repository"
     ]
 }
