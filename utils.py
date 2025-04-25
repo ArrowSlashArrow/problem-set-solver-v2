@@ -1,6 +1,6 @@
 # utility file for modules
 # ignore_module
-import sympy, math
+import math
 
 PI = math.pi
 RAD2DEG = 180 / PI

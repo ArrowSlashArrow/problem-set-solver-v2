@@ -1,25 +1,30 @@
-import os, sys, subprocess, time  # theres no way these every fail to import
+import os, sys, subprocess, time # standard lib imports
+
 log_file = ".log"
-abnormal_exit = False
-class Event:
-    def __init__(self, name="UNKNOWN EVENT", **kwargs):
-        self.values = kwargs
-        divider = " | " if len(kwargs) > 0 else ""
-        open(log_file, "a").write(f"[{time.time():.3f} {name.upper()}{divider}{str(self.values)[1:-1]}]\n")
+settings_file = "settings.json"
+return_keyword = "back"
+all = ["all", "everything"]
+
+def Event(name="UNKNOWN EVENT", **kwargs):
+    global log_file
+    divider = " | " if len(kwargs) > 0 else ""
+    with open(log_file, "a") as log:
+        log.write(f"[{time.time():.3f} {name.upper()}{divider}{str(kwargs)[1:-1]}]\n")
 
 restart_enabled = False if "--no-restart" in sys.argv else True
+restarting = True if "--restarting" in sys.argv else False
 no_exit_text = True if "--no-exit-text" in sys.argv else False
 
 if log_file not in os.listdir():
     open(log_file, "w").close()
-elif not "--restarting" in sys.argv:
+elif not restarting:
     open(log_file, "a").write("\n")
     Event("START PROGRAM")
 
 def restart(updating=False):
     if not restart_enabled:
         if not updating:
-            print("Restart is disabled")
+            print("Restart is disabled!")
         return
     Event("RESTART", REASON="UPDATING" if updating else "USER RESTART")
     print("Restarting script...")
@@ -35,7 +40,7 @@ try:
     from rich import console, table, prompt, text, traceback
 except ModuleNotFoundError as e:
     try:
-        Event("installing dependencies")
+        Event("INSTALLING DEPENDENCIES")
         print("Installing required modules...")
         subprocess.check_call(install_str.split(" "))
         print("Restarting the script...")
@@ -46,7 +51,6 @@ except ModuleNotFoundError as e:
         else:
             restart()
     except Exception as e:
-        abnormal_exit = True
         print(f"\x1b[38;5;9mFATAL\x1b[0m] \x1b[38;5;9mCould not install the required libraries. please run '{install_str}'\n Error: {e}\x1b[0m")
     
 
@@ -87,24 +91,19 @@ class Setting:
 # unpack function for list[Module] -> good data for new_table() 
 # returns [[ids], [name], [descriptions], [tags as a string]]
 def get_module_data(modules: list[Module]):
-    ids = []
-    names = []
-    descriptions = []
-    tags = [] 
-    versions = []
-    filenames = []
-    for m in modules:  # formats everything properly so rich can display it
-        ids.append(str(len(ids)))
-        names.append(m.name)
-        descriptions.append(m.description)
-        tags.append(", ".join(m.tags))
-        versions.append(str(m.version))
-        filenames.append(m.filename)
-    return [ids, names, descriptions, tags, versions, filenames]
+    return [
+        [str(i) for i in range(len(modules))],      # ids
+        [m.name for m in modules],                  # names
+        [m.description for m in modules],           # descriptions
+        [", ".join(m.tags) for m in modules],       # tags
+        [str(m.version) for m in modules],          # versions
+        [m.filename for m in modules]               # filenames
+    ]
 
 # intialize rich console and module table arrays
 console = console.Console()
 modules = []
+default_module = Module("file", "<Unknown>", "<No description>", [], "<Unknown>")
 
 info = {
     "authors": ["Authors: ", "</> (arrow) and bitfeller"],
@@ -130,7 +129,7 @@ If a module crashes, an error will appear displaying the crash message.
 If you want to delete all modules, type 'all' or 'everything' at the module delete prompt.
 Similarly, if you want to download all modules on the server, type 'all' or 'everything' at its respective prompt.
 
-If you want to go back to the action selection from any prompt, type [cyan]back[/].
+If you want to go back to the action selection from any prompt, type [cyan]{return_keyword}[/].
 If you want to send feedback or suggest a feature, select action 12 and enter the feedback.
 
 [bold]## COMMON PROBLEMS[/]
@@ -148,7 +147,7 @@ Made by {info['authors'][1]} on 2025/03/19, last updated on v{info['version'][1]
 
 about_str = text.Text.from_markup(f"""\nAbout Problem Set Solver:\n{about_txt}""")
 
-# shorthand
+# action : shorthand
 actions = {
     "Select a module": "sel",
     "List all modules": "ls",
@@ -169,7 +168,6 @@ actions = {
     "Restart": "r",
     "Exit": "x"
 }
-settings_file = "settings.json"
 update_files = []
 
 
@@ -212,65 +210,39 @@ def display_traceback():
     if get_setting("display_tracebacks"):
         console.print(traceback.Traceback())
 
-
-# wanted to refactor this but couldn't
-# if it works, don't touch it
-def pack_dicts(*args):
-    keys = [list(arg.keys()) for arg in args]
-    if len(set(map(tuple, keys))) != 1:
-        return args[0]
-    keys = keys[0]
-    values = [list(arg.values()) for arg in args]
-    vals = list(map(list, zip(*values[::-1])))
-    return {k: v for k, v in zip(keys, vals)}
-
-
 # merges all of the dicts by key
 # if a key already has a value in a previous dict, the value does not get overwritten
 # otherwise, the key is added to the conglomerate
 def merge_dicts(*args):
-    if len(args) == 0:
-        return {}
-    
-    # don't like the nesting but it works so whatever
-    conglomerate = args[0]
-    for arg in args:
-        for key, value in arg.items():
-            if key not in conglomerate:
-                conglomerate[key] = value
-    return conglomerate    
+    conglomerate = args[-1]
+    for d in args[:-1][::-1]:
+        conglomerate.update(d)
+    return conglomerate
 
 def transpose(array):
     return [list(m) for m in zip(*array)]
 
 def get_setting(setting, fallback=None):
-    if not setting in list(settings.keys()):
-        return fallback
-    
-    return settings[setting].value
+    return fallback if setting not in settings else settings[setting].value
 
 # update the various settings arrays
 def update_settings():
     global settings, setting_data
-    raw_settings_file = open(settings_file, "r").read()
+    with open(settings_file, "r") as file:
+        raw_settings_file = file.read()
     if raw_settings_file.strip() == "":
         open(settings_file, "w").write("{}")  # write empty dict
         raw_settings_file = "{}"
     raw_settings_dict = json.loads(raw_settings_file)
-    for key in list(raw_settings_dict.keys()):
-        settings[key] = (Setting(*raw_settings_dict[key]))
-
+    settings = { key: Setting(key, *raw_settings_dict[key]) for key in raw_settings_dict.keys() if key not in settings }
 
 # parse num util function
 def parse_num(num: str):
     try:
-        return int(num)
-    except ValueError:
-        try:
-            return float(num)
-        except ValueError:
-            return num
-
+        val = float(num)
+        return int(val) if val == int(val) else val
+    except:
+        return num
 
 # return rich table object
 # example title: {"fone linging": {"style": "cyan", "align": "left"}, ...}
@@ -278,7 +250,7 @@ def parse_num(num: str):
 def new_table(name: str, columns: dict, rows: list[list]):
     module_table = table.Table(title=name)
     if "striped_rows" in settings and get_setting("striped_rows"):
-        module_table.row_styles=["on grey11", "on grey15"]
+        module_table.row_styles = ["on grey11", "on grey15"]
 
     for title, formatting in columns.items():
         module_table.add_column(title, justify=formatting["justify"], style=formatting["style"])
@@ -288,13 +260,14 @@ def new_table(name: str, columns: dict, rows: list[list]):
 
 
 def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=False, back_enabled : bool=True, err_word: str="input", many=False, everything=False):
+    global all
     original_inputs = valid_inputs[:]
     valid_inputs.extend([str(i) for i in range(len(valid_inputs))] if indices else [])    
     if not many:
         choice = ""
         while True:
             inp = prompt.Prompt.ask(input_message).lower().strip()
-            if inp == "back" and back_enabled:
+            if inp == return_keyword and back_enabled:
                 choice = "\0"
                 break
             
@@ -302,33 +275,26 @@ def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=F
                 console.print(f"{inp} is not a valid {err_word}, please try again.")
                 continue
             
-            if indices and type(parse_num(inp)) == int:
-                choice = valid_inputs[int(inp)]
-                break
-            else:
-                choice = inp
-                break
+            choice = valid_inputs.index(inp) if indices and type(parse_num(inp)) == int else inp
+            break
         return choice
     else:
         choices = []
         inp = [i.strip() for i in prompt.Prompt.ask(input_message).split(",")]
-        if inp[0].lower() in ["all", "everything"] and everything:
+        if inp[0].lower() in all and everything:
             return original_inputs
         for i in inp:
             # skip over the input if it is invalid
             if i not in valid_inputs:
                 continue
 
-            if indices and type(parse_num(i)) == int:
-                choices.append(valid_inputs[int(i)])
-            else:
-                choices.append(i)
+            choices.append(valid_inputs[int(i)] if indices and type(parse_num(i)) == int else i)
         return choices
 
 
 def get_metadata(file: str, raw_str=False):
-    current_module = Module("file", "<Unknown>", "<No description>", [], "<Unknown>")
-    ignore = False
+    global default_module
+    current_module = default_module.deepcopy()
     raw_data = open(file, "r").read() if not raw_str else file
 
     lines = raw_data.split("\n")
@@ -342,20 +308,19 @@ def get_metadata(file: str, raw_str=False):
         if "# version: " in line:
             current_module.version = int(line.split("# version: ")[1])
         if get_setting("ignore_str") in line.lower():
-            ignore = True
-    return current_module if not ignore else "IGNORE"
-
+            return "IGNORE"
+    return current_module
 
 def refresh_modules(loaded_text=False):
-    global modules
-    Event("refreshed mods")
+    global modules, default_module
+    Event("REFRESHED MODULES")
     module_files = [m for m in os.listdir("modules") if m.endswith(".py") and os.path.isfile(f"modules/{m}")]
 
     modules = []
     # populate arrays from /modules
     for m in range(len(module_files)):
         # get metadata from within file
-        current_module = Module("file", "<Unknown>", "<No description>", [], "<Unknown>")
+        current_module = None
 
         try:
             meta = get_metadata(f"modules/{module_files[m]}")
@@ -369,7 +334,10 @@ def refresh_modules(loaded_text=False):
         except Exception as e:
             console.print(f"[red]Couldnt read {module_files[m]} because {e}[/]")
 
-        # get the rest of metadata
+        if current_module is None:
+            current_module = default_module.deepcopy()        
+
+        # set the rest of metadata
         current_module.filename = module_files[m]
        
         modules.append(current_module)
@@ -383,46 +351,36 @@ def update_module_table():
     global module_table, module_table_data
     refresh_modules()
 
-    filters = get_setting("filter_tags", "")
-    # gets rid of empty strings
-    for filter in filters:
-        if filter == "":
-            filters.remove(filter)
-    filtered_modules = []
-    for module in modules:
-        # if module tags are within the filter constraints, add the module to the table
-        if set(filters) <= set(module.tags):
-            filtered_modules.append(module)
+    filters = [s for s in get_setting("filter_tags", "") if s != ""]
+    # if module tags are within the filter constraints, add the module to the table
+    filtered_modules = [mod for mod in modules if set(filters) <= set(mod.tags)]
     module_table_data = get_module_data(filtered_modules)
     module_table = new_table("Installed Modules", module_table_columns, module_table_data)
 
-
 # returns module filename
-def module_select(other_valid_inputs=[]):
-   
+def module_select(other_valid_inputs=[]):   
     # update table at execution time to account for imported modules
     update_module_table()
     # info messages
     filters = get_setting('filter_tags')
     if len(filters) > 0:
         console.print(f"Searching by these tags: {', '.join(filters)}")
-    console.print("If no modules show up, type 'back' and try again in a few seconds, or check your tags setting.")
+    console.print(f"If no modules show up, type '{return_keyword}' and try again in a few seconds, or check your tags setting.")
     console.print(module_table)
 
     # get module
     module_names = [m.name for m in modules]
     module_names.extend(other_valid_inputs)
     choice = get_valid_input(f"> Select a module by [cyan]ID[/] or [green]name[/]", module_names, True, "module")
-    if choice == "\0":  
+    if choice == "\0": 
         return
     if choice in other_valid_inputs:
         return choice
     # map choice index to module
     choice_index = module_names.index(choice)
     mod = modules[choice_index]
-    Event("module choice", MODULE=mod.filename)
+    Event("MODULE CHOICE", MODULE=mod.filename)
     return mod
-
 
 def action_select():
     shorthand = list(actions.values())
@@ -450,8 +408,7 @@ def action_select():
     elif choice in lower_actions:
         choice = full_actions[lower_actions.index(choice)]
     Event("ACTION", ACTION=choice)
-    return choice
-        
+    return choice 
 
 def check_module(path: str):
     # load module
@@ -468,12 +425,12 @@ def check_module(path: str):
 
 def load_module(module: Module):
     module_obj = check_module(f"modules/{module.filename}")
-    Event("START MODULE", MODULE=module.filename)
+    Event("START MODULE", MODULE=module.filename, MODULE_NAME=module.name)
     if module_obj:
         try:
             module_obj.solver()
             Event("END MODULE", STATUS="OK")
-        except Exception as e:
+        except:
             Event("END MODULE", STATUS="CRASH")
             display_traceback()
             console.print(f"[red]{module.name} crashed :([/]")
@@ -481,31 +438,26 @@ def load_module(module: Module):
         Event("END MODULE", STATUS="NO SOLVER")
         console.print(f"\n[yellow]{module.name} does not have a solver() function. Unable to run module.[/]\n")
 
-
 def print_back_message():
-    console.print("If you would like to go back to the action selection menu, simply input '[green]back[/]'.")
-
+    console.print(f"If you would like to go back to the action selection menu, simply input '[green]{return_keyword}[/]'.")
 
 def format_settings(settings: list[Setting]):
-    raw_settings = {}
-    for key, setting in settings.items():
-        raw_settings[key] = [setting.name, setting.type, setting.value, setting.description]
-    return raw_settings
-
+    return { # raw_settings
+        key: [setting.name, setting.type, setting.value, setting.description] for key, setting in settings.items()
+    }
 
 def change_settings():
     # initialize table and columns
     
-    settings_table_data = []
-    # populate settings table
-    index = 0
-    for setting in list(settings.values()):
-        name = setting.name
-        value = str(setting.value)
-        data_type = setting.type
-        description = setting.description
-        settings_table_data.append([str(index), name, value, description, data_type])
-        index += 1
+    settings_table_data = [
+        [
+            str(idx),
+            str(setting.name),
+            str(setting.value),
+            setting.description,
+            setting.type
+        ] for idx, setting in enumerate(settings.values())
+    ]
 
     settings_table = new_table("Settings", settings_table_columns, transpose(settings_table_data))
 
@@ -584,7 +536,7 @@ def local_file_select():
 
 
 def delete_module():
-    all = ["all", "everything"]
+    global all
     module = module_select(other_valid_inputs=all)
     if not module:
         return
@@ -609,7 +561,7 @@ def delete_module():
 
 def create_module():
     filename = prompt.Prompt.ask("> Enter the filename of the new module")
-    if filename == "back":
+    if filename == return_keyword:
         return
     if filename.endswith(".py"):
         filename = filename[:-3]  # remove .py
@@ -696,7 +648,7 @@ def format_payload(payload: str, modules=[], feedback="", pwd="", no_error_msg=F
             m = module_select()
             if not m:
                 return "\0"
-            selected_module = m.filename 
+            selected_module = m.filename
             ready_payload["data"] = open(f"modules/{selected_module}", "r").read()
             ready_payload["filename"] = selected_module
             ready_payload["mod"] = m.name
@@ -822,7 +774,7 @@ def reconnect(no_error_msg=False):
 
 @server_required
 def list_server_modules():
-    global session
+    global session, default_module
     # send payload
     payload = format_payload("list")
     req = send_request(payload)
@@ -840,7 +792,7 @@ def list_server_modules():
     
     modules = []
     for name, meta in response["data"].items():
-        new_mod = Module("file", "<Unknown>", "<No description>", [], "<Unknown>")
+        new_mod = default_module.deepcopy()
         new_mod.name = name
         new_mod.description = meta["desc"]
         new_mod.version = meta["version"]
@@ -958,11 +910,10 @@ def update_all(status_text=False):
     for m in modules:
         update_module(m)
 
-
 @server_required
 def send_feedback():
     feedback = input("> What feedback would you like to share with us?\n> ")
-    if feedback == "back":
+    if feedback == return_keyword:
         return
     try:
         # loads request as dict
@@ -1027,6 +978,8 @@ def update_self():
 
 
 def xor_encrypt(text: bytes, pwd: str):
+    if not pwd:
+        raise ValueError("Password cannot be empty.")
     pwd_encoded = pwd.encode()
     return bytes([byte ^ pwd_encoded[index % len(pwd_encoded)] for index, byte in enumerate(text)])
 
@@ -1114,7 +1067,7 @@ def action_controller(action: str):
             print_back_message()
             # check that user can access it
             pwd = prompt.Prompt.ask("> Enter password to access the admin panel", password=True)
-            if pwd.strip() == "back":
+            if pwd.strip() == return_keyword:
                 return
             if hashlib.sha256(pwd.encode("utf-8")).hexdigest() == "878248de86cb7e6492aae17cddff64c393ca018c872ced068e846737e7ec7448":
                 Event("OPENED ADMIN PANEL", STATUS="GOOD PASSWORD")
@@ -1128,7 +1081,7 @@ def action_controller(action: str):
 
 
 def preload():
-    global online, server, server_str, abnormal_exit, settings_file, update_files
+    global online, server, server_str, settings_file, update_files
     os.system("cls" if os.name == "nt" else "clear")
 
     # create /modules if it does not exist
@@ -1197,8 +1150,8 @@ try:
     if __name__ == "__main__":
         main()
 except KeyboardInterrupt:
-    if not no_exit_text and not abnormal_exit:
-        print("\nThanks for using Problem Set Solver by </> (arrow) and bitfeller!")
+    if not no_exit_text:
+        print(f"\nThanks for using Problem Set Solver by {info['authors'][1]}!")
     print("Exiting...")  
     Event("END PROGRAM", STATUS="OK")
     sys.exit(0)
