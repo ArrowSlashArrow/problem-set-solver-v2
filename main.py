@@ -1,4 +1,4 @@
-import os, sys, subprocess, time # standard lib imports
+import os, sys, subprocess, time, copy # standard lib imports
 
 log_file = ".log"
 settings_file = "settings.json"
@@ -223,6 +223,9 @@ def transpose(array):
     return [list(m) for m in zip(*array)]
 
 def get_setting(setting, fallback=None):
+    global settings
+    if setting == "display_tracebacks":
+        return True
     return fallback if setting not in settings else settings[setting].value
 
 # update the various settings arrays
@@ -275,8 +278,12 @@ def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=F
                 console.print(f"{inp} is not a valid {err_word}, please try again.")
                 continue
             
-            choice = valid_inputs.index(inp) if indices and type(parse_num(inp)) == int else inp
-            break
+            if indices and type(parse_num(inp)) == int:
+                choice = valid_inputs[int(inp)]
+                break
+            else:
+                choice = inp
+                break
         return choice
     else:
         choices = []
@@ -294,7 +301,7 @@ def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=F
 
 def get_metadata(file: str, raw_str=False):
     global default_module
-    current_module = default_module.deepcopy()
+    current_module = copy.deepcopy(default_module)
     raw_data = open(file, "r").read() if not raw_str else file
 
     lines = raw_data.split("\n")
@@ -307,7 +314,7 @@ def get_metadata(file: str, raw_str=False):
             current_module.tags = line.split("# tags: ")[1].split(", ")
         if "# version: " in line:
             current_module.version = int(line.split("# version: ")[1])
-        if get_setting("ignore_str") in line.lower():
+        if get_setting("ignore_str", fallback="ignore_module") in line.lower():
             return "IGNORE"
     return current_module
 
@@ -335,7 +342,7 @@ def refresh_modules(loaded_text=False):
             console.print(f"[red]Couldnt read {module_files[m]} because {e}[/]")
 
         if current_module is None:
-            current_module = default_module.deepcopy()        
+            current_module = copy.deepcopy(default_module)        
 
         # set the rest of metadata
         current_module.filename = module_files[m]
@@ -362,7 +369,7 @@ def module_select(other_valid_inputs=[]):
     # update table at execution time to account for imported modules
     update_module_table()
     # info messages
-    filters = get_setting('filter_tags')
+    filters = get_setting('filter_tags', fallback=[])
     if len(filters) > 0:
         console.print(f"Searching by these tags: {', '.join(filters)}")
     console.print(f"If no modules show up, type '{return_keyword}' and try again in a few seconds, or check your tags setting.")
@@ -402,7 +409,7 @@ def action_select():
     available_actions = lower_actions[:]
     available_actions.extend(shorthand)
     choice = get_valid_input(f"> Select an action by its [green]ID[/] or [yellow]name[/]{f' or [red]shorthand[/]' if get_setting('shorthand_actions') else ''}", available_actions, indices=True, err_word="action")
-    
+
     if choice in shorthand:
         choice = full_actions[shorthand.index(choice)]
     elif choice in lower_actions:
@@ -792,7 +799,7 @@ def list_server_modules():
     
     modules = []
     for name, meta in response["data"].items():
-        new_mod = default_module.deepcopy()
+        new_mod = copy.deepcopy(default_module)
         new_mod.name = name
         new_mod.description = meta["desc"]
         new_mod.version = meta["version"]
