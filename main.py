@@ -148,26 +148,26 @@ Made by {info['authors'][1]} on 2025/03/19, last updated on v{info['version'][1]
 about_str = text.Text.from_markup(f"""\nAbout Problem Set Solver:\n{about_txt}""")
 
 # action : shorthand
-actions = {
-    "Select a module": "sel",
-    "List all modules": "ls",
-    "Update a module": "upd",
-    "Update all modules": "updall",
-    "Create a new module": "touch",
-    "Remove a module": "rem",
-    "Import module from file": "fimport",
-    "Import module from server": "simport",
-    "Export module to server": "ex",
-    "Display all modules on server": "sls",
-    "Open admin panel": "oap",
-    "Change settings": "set",
-    "Update the script": "upd",
-    "Print user guide": "guide",
-    "Send feedback": "sfb",
-    "About": "about",
-    "Restart": "r",
-    "Exit": "x"
-}
+actions = [
+    "Select a module",
+    "List all modules",
+    "Update a module",
+    "Update all modules",
+    "Create a new module",
+    "Remove a module",
+    "Import module from file",
+    "Import module from server",
+    "Export module to server",
+    "Display all modules on server",
+    "Open admin panel",
+    "Change settings",
+    "Update the script",
+    "Print user guide",
+    "Send feedback",
+    "About",
+    "Restart",
+    "Exit"
+]
 update_files = []
 
 
@@ -230,14 +230,14 @@ def get_setting(setting, fallback=None):
 
 # update the various settings arrays
 def update_settings():
-    global settings, setting_data
+    global settings
     with open(settings_file, "r") as file:
         raw_settings_file = file.read()
     if raw_settings_file.strip() == "":
         open(settings_file, "w").write("{}")  # write empty dict
         raw_settings_file = "{}"
     raw_settings_dict = json.loads(raw_settings_file)
-    settings = { key: Setting(key, *raw_settings_dict[key]) for key in raw_settings_dict.keys() if key not in settings }
+    settings = { key: Setting(*raw_settings_dict[key]) for key in raw_settings_dict.keys() }
 
 # parse num util function
 def parse_num(num: str):
@@ -258,7 +258,7 @@ def new_table(name: str, columns: dict, rows: list[list]):
     for title, formatting in columns.items():
         module_table.add_column(title, justify=formatting["justify"], style=formatting["style"])
     for vals in zip(*rows):
-        module_table.add_row(*vals)
+        module_table.add_row(*[str(v) for v in vals])
     return module_table
 
 
@@ -390,30 +390,21 @@ def module_select(other_valid_inputs=[]):
     return mod
 
 def action_select():
-    shorthand = list(actions.values())
-    full_actions = list(actions.keys())
-    lower_actions = [a.lower() for a in full_actions]
+    lower_actions = [a.lower() for a in actions]
 
     ids = [str(i) for i in range(len(actions))]
     titles = {
         "ID": {"style": "green", "justify": "right"},
         "Action": {"style": "yellow", "justify": "left"}
     }
-    action_table_data = [ids, full_actions]
-    if get_setting("shorthand_actions"):
-        titles["Shorthand"] = {"style": "red", "justify": "left"}
-        action_table_data.append(shorthand)
-
+    action_table_data = [ids, actions]
     action_table = new_table("Actions", titles, action_table_data)
     console.print(action_table)
     available_actions = lower_actions[:]
-    available_actions.extend(shorthand)
-    choice = get_valid_input(f"> Select an action by its [green]ID[/] or [yellow]name[/]{f' or [red]shorthand[/]' if get_setting('shorthand_actions') else ''}", available_actions, indices=True, err_word="action")
+    choice = get_valid_input(f"> Select an action by its [green]ID[/] or [yellow]name[/]", available_actions, indices=True, err_word="action")
 
-    if choice in shorthand:
-        choice = full_actions[shorthand.index(choice)]
-    elif choice in lower_actions:
-        choice = full_actions[lower_actions.index(choice)]
+    if choice in lower_actions:
+        choice = actions[lower_actions.index(choice)]
     Event("ACTION", ACTION=choice)
     return choice 
 
@@ -453,6 +444,9 @@ def format_settings(settings: list[Setting]):
         key: [setting.name, setting.type, setting.value, setting.description] for key, setting in settings.items()
     }
 
+def save_settings():
+    json.dump(format_settings(settings), open(settings_file, "w"), indent=4)
+    
 def change_settings():
     # initialize table and columns
     
@@ -478,10 +472,10 @@ def change_settings():
     # format input according to data type
     match settings[choice].type:
         case "boolean":
-            inp = prompt.Prompt.ask(f"Enter the new value for {choice} [yes/no]: ")
+            inp = prompt.Prompt.ask(f"Enter the new value for {choice} (yes/no)")
             inp = inp.lower() in ("true", "yes", "ye", "1", "y", "yep", "yea", "yeah")
         case "positive number":
-            inp = prompt.Prompt.ask(f"Enter the new value for {choice} (positive number): ")
+            inp = prompt.Prompt.ask(f"Enter the new value for {choice} (positive number)")
             parsed = parse_num(inp)
             if type(parsed) not in [float, int]:
                 console.print(f"[yellow] Unable to set {choice} to {inp}, the new value should be a positive number[/]")
@@ -491,7 +485,7 @@ def change_settings():
                 return
             inp = parsed 
         case "list":
-            inp = prompt.Prompt.ask(f"Enter the new value for {choice} [values separated by commas]: ")
+            inp = prompt.Prompt.ask(f"Enter the new value for {choice} (values separated by commas)")
             inp = [val.strip() for val in inp.split(",")]
         case _:
             inp = prompt.Prompt.ask(f"Enter the new value for {choice}")
@@ -502,9 +496,6 @@ def change_settings():
     Event("SAVED SETTINGS")
     save_settings()
 
-
-def save_settings():
-    json.dump(format_settings(settings), open(settings_file, "w"), indent=4)
 
 def local_file_select():
     # get file
@@ -940,7 +931,7 @@ def update_self():
     global settings
     if len(update_files) == 0:
         console.print("[yellow]No files were listed to updated. Check your 'Files to update' setting.[/]")
-    with console.status("Updating files...", spinner="dots12"):
+    with console.status("Updating script...", spinner="dots12"):
         # update settings separately
         for file in update_files:
             # make backup
@@ -1101,16 +1092,15 @@ def preload():
         with console.status("Loading settings...", spinner="dots12"):
             # load settings
             if settings_file not in os.listdir():
-                open(settings_file, "w").close()
+                open(settings_file, "w").write("{}")
             update_settings()
             settings_file = get_setting(settings_file, "settings.json")
             update_files = get_setting("update_files", []) + [settings_file]
         console.print("[green]Loaded settings successfully[/]")
         Event("LOADED SETTINGS", STATUS="OK")
-    except Exception as e:
+    except RecursionError:
         console.print(f"[red]Could not find {settings_file}[/]\n[yellow]Running bare-bones installation of PSS. Please update the script (action 12) to download the settings file.[/]")
-        Event("LOADED SETTINGS", STATUS="NOT FOUND", REASON=e)
-        open(settings_file, "w").write("{}")
+        Event("LOADED SETTINGS", STATUS="COULD NOT LOAD", REASON=e)
 
     with console.status("Testing server connection...", spinner="earth"):
         # ping server and check connection
@@ -1134,10 +1124,9 @@ def preload():
     try:
         if get_setting("autoupdate_script"):
             print()
-            with console.status(f"\nUpdating the script...", spinner="bouncingBar"):
-                update_self()
-                Event("UPDATED SCRIPT", STATUS="OK")
-                restart(updating=True)
+            update_self()
+            Event("UPDATED SCRIPT", STATUS="OK")
+            restart(updating=True)
     except Exception as e:
         console.print(f"[red]Could not update the script ({e})[/]")
         Event("UPDATED SCRIPT", STATUS="FAILED", REASON=e)
