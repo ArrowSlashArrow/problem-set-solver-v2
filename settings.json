@@ -47,12 +47,6 @@
         false,
         "Show traffic sent and recieved from the module server"
     ],
-    "shorthand_actions": [
-        "Shorthand actions",
-        "boolean",
-        false,
-        "Enables shorthand for actions (e.g. 'ls' = 'list modules')"
-    ],
     "autoupdate_modules": [
         "Automatically update the modules",
         "boolean",
