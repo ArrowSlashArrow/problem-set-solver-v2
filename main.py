@@ -33,7 +33,7 @@ def restart(updating=False):
         args.append("--no-restart")
     subprocess.run(args + ["--no-exit-text", "--restarting"])
 
-install_str = f"{sys.executable} -m pip install --upgrade --force-reinstall --break-system-packages -r requirements.txt"
+install_str = f"{sys.executable} -m pip install --upgrade --force-reinstall -r requirements.txt"
 # todo alternating colours
 try:
     import importlib.util, json, easygui, shutil, requests, hashlib
