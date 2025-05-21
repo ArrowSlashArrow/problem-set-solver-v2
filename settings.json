@@ -8,7 +8,7 @@
     "module_server": [
         "Module server",
         "domain",
-        "api.bitfeller.uk/pmodmgr",
+        "pmodmgr.bitfeller.uk",
         "Server where modules are stored"
     ],
     "censor_server": [
