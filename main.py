@@ -87,6 +87,9 @@ class Setting:
         self.name = name
         self.description = description
 
+    def __repr__(self):
+        return f"<Setting: {vars(self)}>"
+
 
 # unpack function for list[Module] -> good data for new_table() 
 # returns [[ids], [name], [descriptions], [tags as a string]]
@@ -688,9 +691,6 @@ def send_request(payload, raw=False, no_err=False):
         console.print(text.Text.from_markup("[[yellow]PAYLOAD[/]]") + text.Text(str(payload)))
     Event(f"RESPONSE FROM {server_str}", CODE=req.status_code, RESPONSE=req.text)
     show_response(req)
-    if json.loads(req.text)["data"] == "easter egg":
-        print(r"easter egg triggered lmao goodbye (this is a 0.1% chance)")
-        raise KeyboardInterrupt
     return req
 
 
@@ -757,7 +757,7 @@ def get_session():
 
 
 def reconnect(no_error_msg=False):
-    if last_ping + get_setting("reconnect_timeout", 10) < time.time():
+    if time.time() - last_ping < get_setting("reconnect_timeout", 10):
         if not no_error_msg:
             console.print("[red]Server is offline. Unable to perform action.[/]")
     else:
@@ -975,12 +975,24 @@ def update_self():
                     os.remove(f'{file}.bak')
 
 
-def xor_encrypt(text: bytes, pwd: str):
+def xor_encrypt(data: bytes, pwd: str) -> bytes:
     if not pwd:
         raise ValueError("Password cannot be empty.")
-    pwd_encoded = pwd.encode()
-    return bytes([byte ^ pwd_encoded[index % len(pwd_encoded)] for index, byte in enumerate(text)])
+    pwd_bytes = pwd.encode()
+    return bytes([((b ^ pwd_bytes[i % len(pwd_bytes)]) + 0xabcdef) % 256 for i, b in enumerate(data)])
+    
+def xor_decrypt(data: bytes, pwd: str) -> bytes:
+    if not pwd:
+        raise ValueError("Password cannot be empty.")
+    pwd_bytes = pwd.encode()
+    return bytes([((b - 0xabcdef) % 256) ^ pwd_bytes[i % len(pwd_bytes)] for i, b in enumerate(data)])
 
+def stringified_settings():
+    string = "{"
+    for k, v in settings.items():
+        string += f"'{k}': Setting(**{vars(v)}),"
+    string = string[:-1] + "}"
+    return string
 
 def open_admin_script(pwd):
     if "admin_enc" not in os.listdir():
@@ -988,17 +1000,24 @@ def open_admin_script(pwd):
         return
     try:
         # decrypt the file
-        main_handler = """
+        split_main_handler = [f"""\
+server = "{server}"
+settings = {stringified_settings()}""","""
 try:
     main()
 except KeyboardInterrupt:
     console.print("Exiting...")
 except:
     console.print("[red]Admin panel crashed[/]")
-""" 
-        exec(xor_encrypt(open("admin_enc", "rb").read(), pwd).decode("utf-8") + main_handler, {"__name__": "__main__", "__builtins__": __builtins__})
+"""]
+        main_handler = split_main_handler[0] + f"\n_hash = '{hashlib.sha256(split_main_handler[1].encode('utf-8')).hexdigest()}'" + split_main_handler[1]
+        exec_str = xor_decrypt(open("admin_enc", "rb").read(), pwd).decode("utf-8") + main_handler
+        open("admin.py", "w").write(exec_str)
+        env = {"__name__": "__main__", "__builtins__": __builtins__}
+        exec(exec_str, env)
         Event("RAN ADMIN PANEL", STATUS="OK")
     except Exception as e:
+        console.print(traceback.Traceback())
         console.print("[red]Failed to run the admin panel[/]")
         Event("RAN ADMIN PANEL", STATUS="FAILED")
 
@@ -1141,7 +1160,7 @@ def main():
         action_controller(action_select())
         update_settings()
 
-
+# TODO: if the session is >60min long, regenerate it
 try:
     if __name__ == "__main__":
         main()
