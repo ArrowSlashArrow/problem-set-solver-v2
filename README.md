@@ -24,4 +24,4 @@ Any shell will do for this step, so here are some of the most common ones:
  - This will run the program
 
 
-If you have any questions, contact me at anton.gorskin09@gmail.com
+If you have any questions, contact me at @arrowslasharrow on Discord.
