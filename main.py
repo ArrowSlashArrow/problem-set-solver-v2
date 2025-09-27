@@ -57,8 +57,9 @@ except ModuleNotFoundError as e:
 # nicer way of storing modules
 # also python law dictates that every main.py must have at least one struct
 class Module:
-    def __init__(self, filename: str, name: str, description: str, tags: list[str], version: int):
+    def __init__(self, filename: str, name: str, description: str, tags: list[str], version: int, author: str):
         self.name = name
+        self.author = author
         self.description = description
         self.tags = tags
         self.filename = filename
@@ -66,12 +67,14 @@ class Module:
 
     # pretty-print metadata dict
     def __str__(self):
-        md_dict = {}
-        md_dict["name"] = self.name
-        md_dict["description"] = self.description
-        md_dict["tags"] = self.tags
-        md_dict["filename"] = self.filename
-        md_dict["version"] = self.version
+        md_dict = {
+            "name": self.name,
+            "author": self.author,
+            "description": self.description,
+            "tags": self.tags,
+            "filename": self.filename,
+            "version": self.version,
+        }
 
         return json.dumps(md_dict, indent=4)
     
@@ -100,13 +103,13 @@ def get_module_data(modules: list[Module]):
         [m.description for m in modules],           # descriptions
         [", ".join(m.tags) for m in modules],       # tags
         [str(m.version) for m in modules],          # versions
-        [m.filename for m in modules]               # filenames
+        [m.author for m in modules]                 # authors
     ]
 
 # intialize rich console and module table arrays
 console = console.Console()
 modules = []
-default_module = Module("file", "<Unknown>", "<No description>", [], "<Unknown>")
+default_module = Module("file", "<Unknown>", "<No description>", [], "<Unknown>", "<Unknown>")
 
 info = {
     "authors": ["Authors: ", "</> (arrow) and bitfeller"],
@@ -152,7 +155,7 @@ about_str = text.Text.from_markup(f"""\nAbout Problem Set Solver:\n{about_txt}""
 
 # action : shorthand
 actions = [
-    "Select a module",
+    "Run a module",
     "List all modules",
     "Update a module",
     "Update all modules",
@@ -180,7 +183,7 @@ boilerplate = """# name: <NAME>
 # tags: <TAGS>
 # version: 1
 # made by <USER> on <DATE>
-import math, sympy
+import math
 from utils import *
 
 def solver():
@@ -194,7 +197,7 @@ module_table_columns = {
     "Module Description": {"style": "yellow", "justify": "left"},
     "Tags": {"style": "red", "justify": "left"},
     "Version": {"style": "purple", "justify": "right"},
-    "Filename": {"style": "grey62", "justify": "right"}
+    "Author": {"style": "grey62", "justify": "right"}
 }
 
 settings_table_columns = {
@@ -653,9 +656,9 @@ def format_payload(payload: str, modules=[], feedback="", pwd="", no_error_msg=F
             ready_payload["data"] = open(f"modules/{selected_module}", "r").read()
             ready_payload["filename"] = selected_module
             ready_payload["mod"] = m.name
+            ready_payload["author"] = m.author
             ready_payload["overrideVersion"] = False
             ready_payload["overrideMod"] = True
-            ready_payload["session"] = session
         case "feedback":
             ready_payload["session"] = session
             ready_payload["feedback"] = feedback
@@ -1012,7 +1015,6 @@ except:
 """]
         main_handler = split_main_handler[0] + f"\n_hash = '{hashlib.sha256(split_main_handler[1].encode('utf-8')).hexdigest()}'" + split_main_handler[1]
         exec_str = xor_decrypt(open("admin_enc", "rb").read(), pwd).decode("utf-8") + main_handler
-        open("admin.py", "w").write(exec_str)
         env = {"__name__": "__main__", "__builtins__": __builtins__}
         exec(exec_str, env)
         Event("RAN ADMIN PANEL", STATUS="OK")
