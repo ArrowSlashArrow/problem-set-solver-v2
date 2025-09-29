@@ -23,7 +23,7 @@ def braille_from_bits(bits: list[int]):
     return chr(0x2800 + sum(b << i for (i, b) in enumerate(transformed)))
 
 def get_rel_from_eq(eqstr: str):
-    eqstr = eqstr.replace("^", "**")
+    eqstr = eqstr.replace("exp", "e^").replace("^", "**").replace("e", "2.718281828").replace("pi", "3.14159265358979")
     if "=" in eqstr:
         lhs, rhs = eqstr.split("=")
         expr = f"{lhs}-({rhs})"
@@ -94,4 +94,7 @@ def render_fn(eq_str: str | list[str], size=shutil.get_terminal_size(), with_axe
 
     return "\n".join(["".join([braille_from_bits(char) for char in buf_row]) for buf_row in buffer])
 
-print(render_fn("y = sin(x)"))
+print(render_fn([
+    "2x + y = 1",
+    "x^2 + y^2 = 4"
+], with_axes=True))

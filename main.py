@@ -8,7 +8,7 @@ all = ["all", "everything"]
 def Event(name="UNKNOWN EVENT", **kwargs):
     global log_file
     divider = " | " if len(kwargs) > 0 else ""
-    with open(log_file, "a") as log:
+    with open(log_file, "a", encoding="utf-8") as log:
         log.write(f"[{time.time():.3f} {name.upper()}{divider}{str(kwargs)[1:-1]}]\n")
 
 restart_enabled = False if "--no-restart" in sys.argv else True
@@ -186,6 +186,8 @@ boilerplate = """# name: <NAME>
 import math
 from utils import *
 
+# note to module developers: use trig functions from utils for degree versions.
+# the `math` library already has this functionality, and the utils.py file has wrappers for those.
 def solver():
     pass
 """
@@ -308,7 +310,7 @@ def get_valid_input(input_message: str, valid_inputs: list[str], indices: bool=F
 def get_metadata(file: str, raw_str=False):
     global default_module
     current_module = copy.deepcopy(default_module)
-    raw_data = open(file, "r").read() if not raw_str else file
+    raw_data = open(file, "r", encoding="utf-8").read() if not raw_str else file
 
     lines = raw_data.split("\n")
     for line in lines:
@@ -653,7 +655,7 @@ def format_payload(payload: str, modules=[], feedback="", pwd="", no_error_msg=F
             if not m:
                 return "\0"
             selected_module = m.filename
-            ready_payload["data"] = open(f"modules/{selected_module}", "r").read()
+            ready_payload["data"] = open(f"modules/{selected_module}", "r", encoding="utf-8").read()
             ready_payload["filename"] = selected_module
             ready_payload["mod"] = m.name
             ready_payload["author"] = m.author
@@ -1026,7 +1028,7 @@ except:
 
 def action_controller(action: str):
     match action:
-        case "Select a module":
+        case "Run a module":
             module = module_select()
             if not module:
                 return

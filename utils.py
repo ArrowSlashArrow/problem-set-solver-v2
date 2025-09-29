@@ -356,7 +356,7 @@ def braille_from_bits(bits: list[int]):
     return chr(0x2800 + sum(b << i for (i, b) in enumerate(transformed)))
 
 def get_rel_from_eq(eqstr: str):
-    eqstr = eqstr.replace("^", "**")
+    eqstr = eqstr.replace("exp", "e^").replace("^", "**").replace("e", "2.718281828").replace("pi", "3.14159265358979")
     if "=" in eqstr:
         lhs, rhs = eqstr.split("=")
         expr = f"{lhs}-({rhs})"
@@ -426,3 +426,18 @@ def render_fn(eq_str: str | list[str], size=shutil.get_terminal_size(), with_axe
     buffer = fill_buffer(xstep, ystep, camera, size, relation_fns)
 
     return "\n".join(["".join([braille_from_bits(char) for char in buf_row]) for buf_row in buffer])
+
+
+def _degrees_wrapper(fn_name):
+    fn = getattr(math, fn_name)
+    def wrapper(*args, **kwargs):
+        return math.degrees(fn(*args, **kwargs))
+    return wrapper
+    
+sin    = _degrees_wrapper("sin")
+cos    = _degrees_wrapper("cos")
+tan    = _degrees_wrapper("tan")
+asin   = _degrees_wrapper("asin")
+acos   = _degrees_wrapper("acos")
+atan   = _degrees_wrapper("atan")
+atan2  = _degrees_wrapper("atan2")
