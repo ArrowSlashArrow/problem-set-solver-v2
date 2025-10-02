@@ -22,16 +22,22 @@ def braille_from_bits(bits: list[int]):
     
     return chr(0x2800 + sum(b << i for (i, b) in enumerate(transformed)))
 
+transformations = standard_transformations + (implicit_multiplication_application, )
+
+def get_eq(eq_str, implied_rhs=""):
+    
+    replaced = eq_str.replace("exp", "e^").replace("^", "**").replace("e", "2.718281828").replace("pi", "3.14159265358979")
+    if len(implied_rhs) > 0 and "=" not in eq_str:
+        replaced += f" = {implied_rhs}"
+    lhs, rhs = replaced.split("=")
+    lhs_expr = parse_expr(lhs.strip(), transformations=transformations)
+    rhs_expr = parse_expr(rhs.strip(), transformations=transformations)
+    return sympy.Eq(lhs_expr, rhs_expr)
+
 def get_rel_from_eq(eqstr: str):
-    eqstr = eqstr.replace("exp", "e^").replace("^", "**").replace("e", "2.718281828").replace("pi", "3.14159265358979")
-    if "=" in eqstr:
-        lhs, rhs = eqstr.split("=")
-        expr = f"{lhs}-({rhs})"
-    else:
-        expr = f"{eqstr} - y"
+    eq = get_eq(eqstr, "y")
         
-    transformations = standard_transformations + (implicit_multiplication_application, )
-    relation = sympy.parse_expr(expr, transformations=transformations)
+    relation = sympy.parse_expr(f"{eq.lhs - eq.rhs}", transformations=transformations)
     
     return sympy.lambdify(sympy.symbols("x y"), relation, "numpy")
 
