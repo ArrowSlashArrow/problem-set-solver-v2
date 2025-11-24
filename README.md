@@ -22,6 +22,3 @@ Any shell will do for this step, so here are some of the most common ones:
  - This will install all the requirements, and this is necessary because the program will not run without them
 ## 5. Run `python main.py`
  - This will run the program
-
-
-If you have any questions, contact me at @arrowslasharrow on Discord.
