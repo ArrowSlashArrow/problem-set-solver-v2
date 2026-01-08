@@ -13,4 +13,4 @@ requests-toolbelt==1.0.0
 rich==13.9.4
 sympy==1.13.3
 typing_extensions==4.13.2
-urllib3==2.3.0
+urllib3==2.6.3
