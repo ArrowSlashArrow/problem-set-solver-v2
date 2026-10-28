@@ -1,5 +1,5 @@
 # Holy requirements
-certifi==2025.1.31
+certifi==2026.10.18
 charset-normalizer==3.4.1
 easygui==0.98.3
 idna==3.15
